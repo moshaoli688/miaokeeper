@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BBAlliance/miaokeeper/memutils"
 	jsoniter "github.com/json-iterator/go"
 	tb "gopkg.in/tucnak/telebot.v2"
 )
@@ -124,20 +125,13 @@ func CheckChannelFollow(m *tb.Message, user *tb.User, isJoin bool) bool {
 					}
 					joinmap.Unset(joinVerificationId)
 				} else {
-					time.AfterFunc(time.Minute*5, func() {
-						Bot.Delete(msg)
-						if joinmap.Exist(joinVerificationId) {
-							cm, err := Bot.ChatMemberOf(&tb.Chat{ID: chatId}, &tb.User{ID: userId})
-							if err != nil || cm.Role == tb.Restricted || cm.Role == tb.Kicked || cm.Role == tb.Left {
-								KickOnce(chatId, userId)
-								SmartSend(m.Chat, fmt.Sprintf(Locale("channel.kicked", GetSenderLocale(m)), userId), &tb.SendOptions{
-									ParseMode:             "Markdown",
-									DisableWebPagePreview: true,
-									AllowWithoutReply:     true,
-								})
-							}
-						}
-					})
+					lazyScheduler.After(time.Minute*5, memutils.LSC("inGroupVerify", &InGroupVerifyArgs{
+						ChatId:         chatId,
+						UserId:         userId,
+						MessageId:      msg.ID,
+						VerificationId: joinVerificationId,
+						LanguageCode:   user.LanguageCode,
+					}))
 					Bot.Delete(m)
 					return false
 				}
@@ -586,44 +580,8 @@ func IsGroupAdminTelegram(c *tb.Chat, u *tb.User) bool {
 }
 
 func LazyDelete(m *tb.Message) {
-	time.AfterFunc(time.Second*10, func() {
-		Bot.Delete(m)
-	})
+	lazyScheduler.After(time.Second*10, memutils.LSC("deleteMessage", &DeleteMessageArgs{
+		ChatId:    m.Chat.ID,
+		MessageId: m.ID,
+	}))
 }
-
-// func StartCountDown() {
-// 	chat := int64(-1001270914368) // miao group
-// 	// chat := int64(-1001681365705) // test group
-// 	target := int64(1640408400)
-// 	if target-time.Now().UnixMilli()/1000 < 0 {
-// 		return
-// 	}
-// 	c := &tb.Chat{ID: chat}
-// 	msg, _ := SmartSend(c, "🎄 EST 时区圣诞节倒计时已激活 ～")
-// 	Bot.Pin(msg)
-
-// 	for {
-// 		time.Sleep(time.Second - time.Millisecond*10)
-// 		ct := target - time.Now().UnixMilli()/1000
-// 		if ct >= 3600 {
-// 			if ct%3600 == 0 {
-// 				go SmartEdit(msg, fmt.Sprintf("🎄 还有 %d 小时 EST 时区圣诞倒计时开始", ct/3600))
-// 			}
-// 		} else if ct >= 600 {
-// 			if ct%600 == 0 {
-// 				go SmartEdit(msg, fmt.Sprintf("🎄 还有 %d 分钟 EST 时区圣诞倒计时开始", ct/60))
-// 			}
-// 		} else if ct >= 60 {
-// 			if ct%60 == 0 {
-// 				Bot.Delete(msg)
-// 				msg, _ = SmartSend(chat, fmt.Sprintf("🎄 还有 %d 分钟 EST 时区圣诞倒计时开始", ct/60))
-// 				Bot.Pin(msg)
-// 			}
-// 		} else if ct > 0 && ct <= 10 {
-// 			go SmartEdit(msg, fmt.Sprintf("🎄 倒计时开始！距离 EST 圣诞节还有 %d 秒 EST ～", ct))
-// 		} else if ct <= 0 {
-// 			go SmartEdit(msg, "🎄 各位喵群的小伙伴们！！！圣诞节快乐～～～")
-// 			return
-// 		}
-// 	}
-// }

@@ -6,9 +6,11 @@ services:
       - miaokeeper
     links:
       - mariadb
+      - redis
     depends_on:
       - mariadb
-    command: -token <YOUR_TOKEN> -database root:miaokeeper2022@tcp\(mariadb:3306\)/miaokeeper
+      - redis
+    command: -token <YOUR_TOKEN> -database root:miaokeeper2022@tcp\(mariadb:3306\)/miaokeeper -redis redis:6379
     restart: unless-stopped
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
@@ -22,6 +24,15 @@ services:
       - db-data:/var/lib/mysql
     networks:
       - miaokeeper
+    restart: unless-stopped
+  
+  redis:
+    image: redis
+    volumes:
+      - redis-data:/data
+    networks:
+      - miaokeeper
+    command: redis-server --save 60 1
     restart: unless-stopped
 
   watchtower:
@@ -39,6 +50,7 @@ services:
 
 volumes:
   db-data:
+  redis-data:
 
 networks:
   miaokeeper:

@@ -11,6 +11,7 @@ var VersionArg = false
 var PingArg = false
 var CleanArg = false
 var setadmin = int64(0)
+var redisServer = ""
 
 func main() {
 	if VersionArg {
@@ -61,6 +62,7 @@ func init() {
 	flag.StringVar(&TOKEN, "token", "", "telegram bot token")
 	flag.StringVar(&TELEGRAMURL, "upstream", "", "telegram upstream api url")
 	flag.StringVar(&DBCONN, "database", "", "mysql or its compatible database connection URL")
+	flag.StringVar(&redisServer, "redis", "", "use redis to provide high availability among restarts")
 	flag.BoolVar(&VerboseMode, "verbose", false, "display all logs")
 	flag.BoolVar(&VersionArg, "version", false, "display current version and exit")
 	flag.BoolVar(&PingArg, "ping", false, "test the round time trip between bot and telegram server")
@@ -71,4 +73,6 @@ func init() {
 	flag.StringVar(&APIToken, "api-token", "", "specify a token that needs to be passed in when calling api methods")
 
 	flag.Parse()
+
+	InitTelegramArgs()
 }

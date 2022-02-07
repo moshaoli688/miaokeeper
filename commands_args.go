@@ -444,7 +444,8 @@ func CmdCreateLottery(m *tb.Message) {
 	// :limit=(0-inf)
 	// :consume=n|y
 	// :num=1|100
-	// :draw=manual|>num
+	// :duration=(0-3*24*60min)
+	// :participant=(0-inf)
 	// :pin=y|n
 	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
 		payload, ah := ArgParse(m.Payload)
@@ -455,7 +456,7 @@ func CmdCreateLottery(m *tb.Message) {
 			num = 1
 		}
 		duration, _ := ah.Int("duration")
-		if duration <= 0 || duration >= 72 {
+		if duration <= 0 || duration >= 3*24*60 {
 			duration = 0
 		}
 		participant, _ := ah.Int("participant")

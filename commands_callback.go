@@ -149,9 +149,7 @@ func CmdOnCallback(c *tb.Callback) {
 				li := GetLottery(lotteryId)
 				if li != nil {
 					if cmdtype == 2 && isMiaoGroupAdmin {
-						li.Status = 0
-						li.Update()
-						li.UpdateTelegramMsg()
+						li.StartLottery()
 						Rsp(c, "cb.lottery.start")
 					} else if cmdtype == 3 && isMiaoGroupAdmin {
 						li.CheckDraw(true)

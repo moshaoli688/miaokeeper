@@ -1,6 +1,6 @@
 # Miaokeeper  
 
-> Miaokeeper 是一个群成员自主管理机器人，可以在 telegram 群组中实现：群成员自主管理、入群验证、积分统计、积分抽奖等功能。  
+> Miaokeeper 是一个群成员自主管理机器人，可以在 telegram 群组中实现：群成员自主管理、入群验证、积分统计、积分抽奖等功能。使用案例：[品云](https://t.me/PinYunYes)、项目群组：[喵屋](https://t.me/MiaoGroup)。   
 >
 > ## 前期准备  
 >
@@ -10,8 +10,12 @@
 >
 > ## 如何安装  
 >
-> 目前支持  `直接安装` 和 `docker` 安装两种模式    
+> 目前支持  `直接安装` 和 `docker` 安装两种模式。    
 >
+
+### 0.在线开发
+
+[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/BBAlliance/miaokeeper)
 
 ### 1.直接安装  
 
@@ -132,6 +136,7 @@ systemctl status miaokeeper.service                 #查看miaokeeper状态
 
 ```bash
 -database string       #mysql或其兼容的数据库连接URL
+-redis string          #redis连接地址，通过redis提升后台计时器的可用性和容错率，例如 'password@your.ip.address:port'
 -ping                  #测试bot和电报服务器之间的往返时间
 -token string          #电报机器人令牌
 -upstream string       #电报上游api url
@@ -175,7 +180,6 @@ systemctl status miaokeeper.service                 #查看miaokeeper状态
 /creditrank           #开榜获取积分排行榜
 /redpacket            #积分红包请输入 /redpacket <总分数> <红包个数> 来发红包哦～
 /lottery              #抽奖（可加A B两个参数，从A总人数中抽B人数）
-/transfer             #积分转移，回复一个用户 /transfer <分数> 可以实现积分迁移
 
 ```
 
@@ -184,5 +188,6 @@ systemctl status miaokeeper.service                 #查看miaokeeper状态
 ```
 /mycredit      #我的积分
 /version       #版本查询
+/transfer      #回复一个用户来完成积分转移
 /ping          #检测bot和群组响应速度
 ```

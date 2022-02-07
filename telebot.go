@@ -4,9 +4,11 @@ import (
 	"math/rand"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/BBAlliance/miaokeeper/memutils"
 	"github.com/bep/debounce"
 	tb "gopkg.in/tucnak/telebot.v2"
 )
@@ -44,6 +46,7 @@ var redpacketmap *ObliviousMapInt
 var redpacketnmap *ObliviousMapInt
 
 var debouncer func(func())
+var lazyScheduler *memutils.LazyScheduler
 
 var callbacklock sync.Mutex
 var usercreditlock sync.Mutex
@@ -175,8 +178,8 @@ func InitTelegram() {
 	go Bot.Start()
 
 	if !PingArg {
-		// go StartCountDown()
 		DInfo("MiaoKeeper is up.")
+		lazyScheduler.Recover()
 	}
 
 	if CleanArg {
@@ -184,18 +187,39 @@ func InitTelegram() {
 	}
 }
 
-func init() {
+func InitTelegramArgs() {
 	rand.Seed(time.Now().UnixNano())
 	puncReg = regexp.MustCompile(`^[!$%&"'*+,\-.{}[\]():;=?^_|~\\][a-zA-Z0-9]+`)
 	// puncReg = regexp.MustCompile(`^[!"#$%&'()*+,\-./:;<=>?@[\]^_{|}~\\` + "`" + `][a-zA-Z0-9]+`)
-	zcomap = NewOMapInt(60*60*1000, true)
-	creditomap = NewOMapInt(60*60*1000, false)
-	votemap = NewOMapInt(30*60*1000, false)
 
-	joinmap = NewOMapInt(5*60*1000+30*1000, false)
+	// create a memory cache driver
+	var memdriver memutils.MemDriver
+	if redisServer != "" {
+		args := strings.SplitN(redisServer, "@", 2)
+		if len(args) < 2 {
+			args = append(args, "")
+			args[0], args[1] = args[1], args[0]
+		}
+		memdriver = &memutils.MemDriverRedis{}
+		memdriver.Init(args[1], args[0])
+	}
 
-	redpacketrankmap = NewOMapStr(24*60*60*1000, false)
-	redpacketmap = NewOMapInt(24*60*60*1000, false)
-	redpacketnmap = NewOMapInt(24*60*60*1000, false)
+	if memdriver == nil {
+		memdriver = &memutils.MemDriverMemory{}
+		memdriver.Init()
+	}
+
+	zcomap = NewOMapInt("zc/", time.Hour, true, memdriver)
+	creditomap = NewOMapInt("credit/", time.Hour, false, memdriver)
+	votemap = NewOMapInt("vote/", time.Minute*30, false, memdriver)
+	joinmap = NewOMapInt("join/", time.Minute*5+time.Second*30, false, memdriver)
+
+	redpacketrankmap = NewOMapStr("rprank/", time.Hour*24, false, memdriver)
+	redpacketmap = NewOMapInt("rp/", time.Hour*24, false, memdriver)
+	redpacketnmap = NewOMapInt("rpname/", time.Hour*24, false, memdriver)
+
 	debouncer = debounce.New(time.Second)
+	lazyScheduler = memutils.NewLazyScheduler(memdriver)
+
+	InitScheduler()
 }

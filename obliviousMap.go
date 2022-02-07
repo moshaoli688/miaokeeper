@@ -1,87 +1,34 @@
 package main
 
 import (
-	"sync"
+	"strconv"
 	"time"
+
+	"github.com/BBAlliance/miaokeeper/memutils"
 )
 
 type ObliviousMapIfce struct {
-	duration int64
-	timer    map[string]int64
-	inner    map[string]interface{}
+	prefix string
+	driver memutils.MemDriver
 
-	utif bool
-
-	lock sync.Mutex
-}
-
-func NowTS() int64 {
-	return time.Now().UnixMilli()
-}
-
-func (om *ObliviousMapIfce) unsafeGet(key string) (interface{}, bool) {
-	now := NowTS()
-	v, ok := om.inner[key]
-	if ok {
-		if t, ok := om.timer[key]; ok {
-			if t <= now {
-				delete(om.inner, key)
-				delete(om.timer, key)
-				return 0, false
-			}
-			return v, true
-		} else {
-			delete(om.inner, key)
-			return 0, false
-		}
-	}
-	return 0, false
+	expire time.Duration
+	utif   bool
 }
 
 func (om *ObliviousMapIfce) Get(key string) (interface{}, bool) {
-	om.lock.Lock()
-	defer om.lock.Unlock()
-
-	return om.unsafeGet(key)
-}
-
-func (om *ObliviousMapIfce) unsafeSet(key string, value interface{}) interface{} {
-	now := NowTS()
-	_, ok := om.inner[key]
-	om.inner[key] = value
-	if !ok || om.utif {
-		om.timer[key] = now + om.duration
-	}
-	return value
+	return om.driver.Read(om.prefix + key)
 }
 
 func (om *ObliviousMapIfce) Set(key string, value interface{}) interface{} {
-	om.lock.Lock()
-	defer om.lock.Unlock()
-
-	return om.unsafeSet(key, value)
+	return om.driver.Write(om.prefix+key, value, om.expire, om.utif)
 }
 
 func (om *ObliviousMapIfce) Unset(key string) {
-	om.lock.Lock()
-	defer om.lock.Unlock()
-
-	_, ok := om.inner[key]
-	if ok {
-		delete(om.inner, key)
-	}
-	_, ok = om.timer[key]
-	if ok {
-		delete(om.timer, key)
-	}
+	om.driver.Expire(om.prefix + key)
 }
 
 func (om *ObliviousMapIfce) Exist(key string) bool {
-	om.lock.Lock()
-	defer om.lock.Unlock()
-
-	_, ok := om.inner[key]
-	return ok
+	return om.driver.Exists(om.prefix + key)
 }
 
 type ObliviousMapInt struct {
@@ -89,16 +36,25 @@ type ObliviousMapInt struct {
 }
 
 func (om *ObliviousMapInt) Add(key string) int {
-	om.lock.Lock()
-	defer om.lock.Unlock()
-
-	v, _ := om.unsafeGet(key)
-	return om.unsafeSet(key, v.(int)+1).(int)
+	return om.driver.Inc(om.prefix+key, om.expire, om.utif)
 }
 
 func (om *ObliviousMapInt) Get(key string) (int, bool) {
 	a, b := om.ObliviousMapIfce.Get(key)
-	return a.(int), b
+	if a == nil {
+		return 0, b
+	}
+	switch x := a.(type) {
+	case string:
+		v, err := strconv.Atoi(x)
+		return v, err == nil
+	case int64:
+		return int(x), b
+	case int:
+		return x, b
+	default:
+		return 0, false
+	}
 }
 
 func (om *ObliviousMapInt) Set(key string, value int) int {
@@ -118,23 +74,23 @@ func (om *ObliviousMapStr) Set(key string, value string) string {
 	return om.ObliviousMapIfce.Set(key, value).(string)
 }
 
-func NewOMapIfce(duration int64, updateTimeIfWrite bool) *ObliviousMapIfce {
+func NewOMapIfce(prefix string, expire time.Duration, updateTimeIfWrite bool, driver memutils.MemDriver) *ObliviousMapIfce {
 	return &ObliviousMapIfce{
-		duration: duration,
-		timer:    make(map[string]int64),
-		inner:    make(map[string]interface{}),
-		utif:     updateTimeIfWrite,
+		prefix: prefix,
+		expire: expire,
+		driver: driver,
+		utif:   updateTimeIfWrite,
 	}
 }
 
-func NewOMapInt(duration int64, updateTimeIfWrite bool) *ObliviousMapInt {
+func NewOMapInt(prefix string, duration time.Duration, updateTimeIfWrite bool, driver memutils.MemDriver) *ObliviousMapInt {
 	return &ObliviousMapInt{
-		ObliviousMapIfce: NewOMapIfce(duration, updateTimeIfWrite),
+		ObliviousMapIfce: NewOMapIfce(prefix, duration, updateTimeIfWrite, driver),
 	}
 }
 
-func NewOMapStr(duration int64, updateTimeIfWrite bool) *ObliviousMapStr {
+func NewOMapStr(prefix string, duration time.Duration, updateTimeIfWrite bool, driver memutils.MemDriver) *ObliviousMapStr {
 	return &ObliviousMapStr{
-		ObliviousMapIfce: NewOMapIfce(duration, updateTimeIfWrite),
+		ObliviousMapIfce: NewOMapIfce(prefix, duration, updateTimeIfWrite, driver),
 	}
 }
