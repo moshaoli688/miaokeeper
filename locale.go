@@ -1,6 +1,8 @@
 package main
 
-import tb "gopkg.in/tucnak/telebot.v2"
+import (
+	tb "gopkg.in/tucnak/telebot.v2"
+)
 
 var LocaleAlias = map[string]string{
 	"zh-hans": "zh",
@@ -10,7 +12,9 @@ var LocaleAlias = map[string]string{
 var LocaleMap = map[string]map[string]string{
 	"zh": {
 		"system.unexpected": "❌ 无法完成任务，请检查服务器错误日志",
+		"system.notsend":    "❌ 发送消息失败",
 
+		"cmd.getToken":       "*🔍 生成成功*\n\n群组名称: `%s`\n群组 ID: `%d`\nAPI 令牌: `%s`\n回调签名: `%s`",
 		"cmd.zc.notAllowed":  "当前群组不允许互相臭嘴哦 ~",
 		"cmd.zc.indeed":      "确实",
 		"cmd.zc.cantBan":     "我拿它没办法呢 ...",
@@ -28,6 +32,8 @@ var LocaleMap = map[string]map[string]string{
 		"cmd.ey.exec":        "👮 %s, 您被热心群友 %s 报告有发送恶意言论的嫌疑 ⚠️，请注意自己的发言哦！暂时禁言半小时并扣除 50 分作为警告，举报者 15 分奖励已到账。若您觉得这是恶意举报，可以呼吁小伙伴们公投为您解封（累计满 6 票可以解封并抵消扣分），或者直接联系群管理员处理。",
 		"cmd.ey.duplicated":  "👮 他已经被检察官带走啦，不要鞭尸啦 ～",
 
+		"cmd.privateSession":          "👀 请回复这则消息一个文件来为群组 `%s`(%d) 设置 {%s} 哦～",
+		"cmd.privateSession.sended":   "✔️ 建立会话成功，请查看私聊～",
 		"cmd.privateChatFirst":        "❌ 请先私聊我然后再运行这个命令哦",
 		"cmd.noPerm":                  "❌ 您没有使用这个命令的权限呢",
 		"cmd.mustReply":               "❌ 请在群组内回复一个有效用户使用这个命令哦 ～",
@@ -36,14 +42,31 @@ var LocaleMap = map[string]map[string]string{
 		"cmd.mustReplyChannelOrInput": "❌ 请回复一则转发的频道消息或者手动加上频道 id ～",
 		"cmd.mustInGroup":             "❌ 请在群组发送这条命令哦 ～",
 
-		"cmd.misc.version": "👀 当前版本为: %s",
-		"cmd.misc.ping.1":  "🔗 与 Telegram 伺服器的延迟约为:\n\n机器人 DC: `%dms`",
-		"cmd.misc.ping.2":  "🔗 与 Telegram 伺服器的延迟约为:\n\n机器人 DC: `%dms`\n群组 DC: `%dms`",
+		"cmd.misc.version":       "👀 当前版本为: %s",
+		"cmd.misc.replyid.chat":  "*群组 ID:* `%d`\n*回复匿名群 ID:* `%d`\n*回复匿名群类型:* `%s`",
+		"cmd.misc.replyid.user":  "*群组 ID:* `%d`\n*回复用户 ID:* `%d`\n*回复用户语言:* `%s`",
+		"cmd.misc.id.chat":       "*群组 ID:* `%d`\n*匿名群 ID:* `%d`\n*匿名群类型:* `%s`",
+		"cmd.misc.id.user":       "*群组 ID:* `%d`\n*用户 ID:* `%d`\n*用户语言:* `%s`",
+		"cmd.misc.ping.1":        "🔗 与 Telegram 伺服器的延迟约为:\n\n机器人 DC: `%dms`",
+		"cmd.misc.ping.2":        "🔗 与 Telegram 伺服器的延迟约为:\n\n机器人 DC: `%dms`\n群组 DC: `%dms`",
+		"cmd.misc.user.notExist": "❌ 用户记录不存在",
+		"cmd.misc.noChange":      "👀 当前列表没有发生变化，无需刷新 ～",
+		"cmd.misc.outOfRange":    "👀 没有更多记录了呢 ～",
+		"cmd.misc.prevPage":      "⬆️ 上一页",
+		"cmd.misc.atPage":        "第 %d 页",
+		"cmd.misc.nextPage":      "⬇️ 下一页",
+
+		"cmd.credit.logHead": "📖 `%d` 积分记录:\n\n%s",
 
 		"grant.assign.success":  "✔️ TA 已经成为管理员啦 ～",
 		"grant.assign.failure":  "❌ TA 已经是管理员啦 ～",
 		"grant.dismiss.success": "✔️ 已将 TA 的管理员移除 ～",
 		"grant.dismiss.failure": "❌ TA 本来就不是管理员呢 ～",
+
+		"policy.importSuccess":    "✔️ 导入群组策略成功",
+		"policy.exportSuccess":    "✔️ 导出群组策略成功，请在私聊查看结果",
+		"policy.importError":      "❌ 无法下载群组策略，请确定您上传的文件格式正确且小于 10MB",
+		"policy.importParseError": "❌ 解析群组策略错误，请确定您上传的文件格式正确",
 
 		"forward.ban.success":   "✔️ TA 已经被我封掉啦 ～",
 		"forward.ban.failure":   "❌ TA 已经被封禁过啦 ～",
@@ -75,13 +98,14 @@ var LocaleMap = map[string]map[string]string{
 		"su.group.delDuplicate": "❌ 该组尚未开启积分统计哦 ～",
 
 		// not support yet
-		"rp.complete":  "🧧 *积分红包*\n\n小伙伴们手速都太快啦，`%s`的大红包已被瓜分干净，没抢到的小伙伴们请期待下次的活动哦～",
-		"rp.guessLeft": "猜猜看还剩多少？",
-		"rp.text":      "🧧 *积分红包*\n\n``%s发红包啦！大家快抢哦～\n\n剩余积分: `%s`\n剩余数量: `%d`",
-		"rp.lucky":     "\n\n恭喜手气王 `%s` 获得了 `%d` 分 🎉 ~",
+		"rp.complete":     "🧧 *积分红包*\n\n小伙伴们手速都太快啦，`%s`的大红包已被瓜分干净，没抢到的小伙伴们请期待下次的活动哦～",
+		"rp.guessLeft":    "猜猜看还剩多少？",
+		"rp.text":         "🧧 *积分红包*\n\n``%s发红包啦！大家快抢哦～\n\n剩余积分: `%s`\n剩余数量: `%d`",
+		"rp.text.captcha": "\n\n*请选择与上图相符的验证码来抢红包哦～*",
+		"rp.lucky":        "\n\n恭喜手气王 `%s` 获得了 `%d` 分 🎉 ~",
 
 		"rp.admin":              "管理员-",
-		"rp.set.invalid":        "❌ 使用方法不正确呢，请输入 /redpacket `<总分数>` `<红包个数>` 来发红包哦～\n\n备注：红包总分需在 1 ~ 1000 之间，红包个数需在 1 ~ 20 之间，且红包大小不能低于参与人数哦～",
+		"rp.set.invalid":        "❌ 使用方法不正确呢，请输入 /redpacket `<总分数>` `<红包个数>` 来发红包哦～\n\n备注：红包总分需在 1 ~ 100,000 之间，红包个数需在 1 ~ 100 之间，且红包大小不能低于参与人数哦～",
 		"rp.set.noEnoughCredit": "❌ 您的积分不够发这个红包哦，请在努力赚积分吧～",
 
 		"gp.ban.success":   "🎉 恭喜 `%s` 获得禁言大礼包，可喜可贺可喜可贺！",
@@ -99,18 +123,20 @@ var LocaleMap = map[string]map[string]string{
 		"channel.cannotSendMsg":        "❌ 无法发送验证消息，请管理员检查群组权限 ～",
 		"channel.cannotBanUser":        "❌ 无法完成验证流程，请管理员检查机器人封禁权限 ～",
 		"channel.cannotCheckChannel":   "❌ 无法检测用户是否在目标频道内，请管理员检查机器人权限 ～",
+		"channel.pattern.kicked":       "👮‍♀️ [TA](tg://user?id=%d) 的名字命中了广告规则，已自动放逐 15 秒。如果有误杀请联系管理员处理 ～",
 		"channel.kicked":               "👀 [TA](tg://user?id=%d) 没有在规定时间内完成验证，已经被我带走啦 ～",
 
 		"locale.set": "✔️ 设置成功，当前群组的默认语言为: %s ～",
 		"locale.get": "👀 当前群组的默认语言为: %s ～",
 
 		// not support yet
-		"btn.rp.draw": "🤏 我要抢红包|rp/%d/1/%d",
-		"btn.notFair": "😠 这不公平 (%d)|vt/%d/%d/%d",
+		"btn.rp.draw":         "🤏 我要抢红包|rp?r=%d",
+		"btn.rp.draw.captcha": "%s|rp?c=%s&r=%d",
+		"btn.notFair":         "😠 这不公平 (%d)|vote?u=%d&s=%d",
 
-		"btn.adminPanel":    "🚩 解封[管理]|unban/%d/%d/%d||🚮 清退[管理]|kick/%d/%d/%d",
+		"btn.adminPanel":    "🚩 解封[管理]|unban?u=%d&s=%d||🚮 清退[管理]|kick?u=%d&s=%d",
 		"btn.channel.step1": "👉 第一步：关注频道 👈|https://t.me/%s",
-		"btn.channel.step2": "👉 第二步：点我验证 👈|check/%d/%d",
+		"btn.channel.step2": "👉 第二步：点我验证 👈|check?u=%d",
 
 		"cb.unblock.byadmin": "\n\nTA 已被管理员解封 👊",
 		"cb.kicked.byadmin":  "\n\nTA 已被管理员踢出群聊 🦶",
@@ -130,6 +156,7 @@ var LocaleMap = map[string]map[string]string{
 		"cb.rp.nothing":                   "🐢 您的运气也太差啦！什么都没有抽到哦...",
 		"cb.rp.get.1":                     "🎉 恭喜获得 ",
 		"cb.rp.get.2":                     " 积分，积分已经实时到账～",
+		"cb.rp.captchaInvalid":            "❌ 验证码验证失败，您无法领取红包咯～",
 		"cb.rp.duplicated":                "❌ 您已经参与过这次活动了，不能太贪心哦！",
 		"cb.rp.notExists":                 "❌ 抽奖活动已经结束啦！请期待下一次活动～",
 		"cb.lottery.start":                "🎉 活动已确认，请号召群友踊跃参与哦！",
@@ -140,12 +167,15 @@ var LocaleMap = map[string]map[string]string{
 		"cb.notAdmin":                     "❌ 请不要乱玩管理员指令！",
 		"cb.noEvent":                      "❌ 未找到这个活动，请联系管理员解决！",
 		"cb.notParsed":                    "❌ 指令解析出错，请联系管理员解决 ~",
+		"cb.validationError":              "❌ 指令验证失败，请不要乱玩回调指令 ~",
 		"cb.disabled":                     "❌ 这个群组还没有被授权哦 ~",
 	},
 	"en": {
-		"system.unexpected": "❌ cannot fulfill the task, please check logs",
+		"system.unexpected": "❌ Cannot fulfill the task, please check logs",
+		"system.notsend":    "❌ Cannot send the message",
 
-		"cmd.zc.notAllowed":  "嘴臭 is not permitted in this group",
+		"cmd.getToken":       "*🔍 Generate Success*\n\nGroup Name: `%s`\nGroup ID: `%d`\nAPI Token: `%s`\nCallback Sign: `%s`",
+		"cmd.zc.notAllowed":  "Warn is not permitted in this group",
 		"cmd.zc.indeed":      "INDEED",
 		"cmd.zc.cantBan":     "Well, I have nothing to do with it ...",
 		"cmd.zc.cooldown10":  "😠 DO NOT TALK LIKE SHIT, YOU WILL BE PUNISHED BY 10 POINTS",
@@ -162,6 +192,8 @@ var LocaleMap = map[string]map[string]string{
 		"cmd.ey.exec":        "👮 %s, you are reported by %s to shot spam into the group ⚠️, please well behave! You are punished by 50 credit points and the reporter has gained 25 points. Please contact group admin if you think the judgement is a mistake, or you could ask for other members to vote to help.",
 		"cmd.ey.duplicated":  "👮 The user has already been banned.",
 
+		"cmd.privateSession":          "👀 Please reply a config file to this message to assign `%s`(%d) a new {%s} config ~",
+		"cmd.privateSession.sended":   "✔️ Establishing a session successfully, please refer to the private chat ～",
 		"cmd.privateChatFirst":        "❌ Please start me in the private chat before using this command.",
 		"cmd.noPerm":                  "❌ You are not permitted to use this command.",
 		"cmd.mustReply":               "❌ Please reply this command to a valid user is a valid group.",
@@ -170,14 +202,31 @@ var LocaleMap = map[string]map[string]string{
 		"cmd.mustReplyChannelOrInput": "❌ Please reply this command to a forwarded channel message, or pass in the channel id as a parameter.",
 		"cmd.mustInGroup":             "❌ Please send this command in a group chat.",
 
-		"cmd.misc.version": "👀 Current Version: %s",
-		"cmd.misc.ping.1":  "🔗 Telegram Server Transmission Delay:\n\nBot DC: `%dms`",
-		"cmd.misc.ping.2":  "🔗 Telegram Server Transmission Delay:\n\nBot DC: `%dms`\nGroup DC: `%dms`",
+		"cmd.misc.version":       "👀 Current Version: %s",
+		"cmd.misc.replyid.chat":  "*Chat ID:* `%d`\n*Reply SenderChat ID:* `%d`\n*Reply SenderChat Type:* `%s`",
+		"cmd.misc.replyid.user":  "*Chat ID:* `%d`\n*Reply User ID:* `%d`\n*Reply User Locale:* `%s`",
+		"cmd.misc.id.chat":       "*Chat ID:* `%d`\n*SenderChat ID:* `%d`\n*SenderChat Type:* `%s`",
+		"cmd.misc.id.user":       "*Chat ID:* `%d`\n*User ID:* `%d`\n*User Locale:* `%s`",
+		"cmd.misc.ping.1":        "🔗 Telegram Server Transmission Delay:\n\nBot DC: `%dms`",
+		"cmd.misc.ping.2":        "🔗 Telegram Server Transmission Delay:\n\nBot DC: `%dms`\nGroup DC: `%dms`",
+		"cmd.misc.user.notExist": "❌ The credit info of the user does not exist",
+		"cmd.misc.noChange":      "👀 The list is not modified.",
+		"cmd.misc.outOfRange":    "👀 The list is out of range.",
+		"cmd.misc.prevPage":      "⬆️ Last",
+		"cmd.misc.atPage":        "# %d",
+		"cmd.misc.nextPage":      "⬇️ Next",
+
+		"cmd.credit.logHead": "📖 `%d` Logs:\n\n%s",
 
 		"grant.assign.success":  "✔️ The user is promoted ～",
 		"grant.assign.failure":  "❌ The user does not need to be promoted ～",
 		"grant.dismiss.success": "✔️ The user is dismissed ～",
 		"grant.dismiss.failure": "❌ The user does not need to be dismissed ～",
+
+		"policy.importSuccess":    "✔️ Group policy imported.",
+		"policy.exportSuccess":    "✔️ Group policy exported, please check the result in the private chat.",
+		"policy.importError":      "❌ Unable to fetch the file, please make sure the file is valid and less than 10MB.",
+		"policy.importParseError": "❌ Unable to decode the file, please try again.",
 
 		"forward.ban.success":   "✔️ The user has been banned ～",
 		"forward.ban.failure":   "❌ The user was banned ～",
@@ -212,10 +261,11 @@ var LocaleMap = map[string]map[string]string{
 		// "rp.complete":  "🧧 *积分红包*\n\n小伙伴们手速都太快啦，`%s`的大红包已被瓜分干净，没抢到的小伙伴们请期待下次的活动哦～",
 		// "rp.guessLeft": "猜猜看还剩多少？",
 		// "rp.text":      "🧧 *积分红包*\n\n``%s发红包啦！大家快抢哦～\n\n剩余积分: `%s`\n剩余数量: `%d`",
+		// "rp.text.captcha": "\n\n*请选择与上图相符的验证码来抢红包哦～*",
 		// "rp.lucky":     "\n\n恭喜手气王 `%s` 获得了 `%d` 分 🎉 ~",
 
 		"rp.admin":              "Admin ",
-		"rp.set.invalid":        "❌ Invalid Params. Please refer to: /redpacket `<Total Credit>` `<Num of Share>`\n\nPS: Total Credit should be with in 1 and 1000. Number of Share should be with in 1 and 20 and no less than the Total Credit.",
+		"rp.set.invalid":        "❌ Invalid Params. Please refer to: /redpacket `<Total Credit>` `<Num of Share>`\n\nPS: Total Credit should be with in 1 and 100,000. Number of Share should be with in 1 and 100 and no less than the Total Credit.",
 		"rp.set.noEnoughCredit": "❌ You do not have that much credit to send this redpacket.",
 
 		"gp.ban.success":   "🎉 Congrats to `%s` to be restricted!",
@@ -233,18 +283,20 @@ var LocaleMap = map[string]map[string]string{
 		"channel.cannotSendMsg":        "❌ Cannot send the verification message, please check my permission ～",
 		"channel.cannotBanUser":        "❌ Cannot complete the CAPTCHA, please check my permission ～",
 		"channel.cannotCheckChannel":   "❌ Cannot read the user list of targetted channel, please make sure the bot has enough permission in the channel ～",
+		"channel.pattern.kicked":       "👮‍♀️ [The user's](tg://user?id=%d) name has been marked as fraud. If you believe this is a mistake, please contact group admin for help ～",
 		"channel.kicked":               "👀 [The user](tg://user?id=%d) did not pass the MFC verification, so it is banned ～",
 
 		"locale.set": "✔️ The default language of this group has been changed to: %s ～",
 		"locale.get": "👀 The default language of this group is: %s ～",
 
 		// not support yet
-		// "btn.rp.draw": "🤏 我要抢红包|rp/%d/1/%d",
-		// "btn.notFair": "😠 这不公平 (%d)|vt/%d/%d/%d",
+		// "btn.rp.draw": "🤏 我要抢红包|rp?r=%d",
+		// "btn.rp.draw.captcha": "%s|rp?c=%s&r=%d",
+		// "btn.notFair": "😠 这不公平 (%d)|vote?u=%d&s=%d",
 
-		"btn.adminPanel":    "🚩 UNBAN [ADMIN]|unban/%d/%d/%d||🚮 KICK [ADMIN]|kick/%d/%d/%d",
+		"btn.adminPanel":    "🚩 UNBAN [ADMIN]|unban?u=%d&s=%d||🚮 KICK [ADMIN]|kick?u=%d&s=%d",
 		"btn.channel.step1": "👉 1ST: JOIN THE CHANNEL 👈|https://t.me/%s",
-		"btn.channel.step2": "👉 2ND: RELEASE ME 👈|check/%d/%d",
+		"btn.channel.step2": "👉 2ND: RELEASE ME 👈|check?u=%d",
 
 		"cb.unblock.byadmin": "\n\nThe user is unbanned by admin 👊",
 		"cb.kicked.byadmin":  "\n\nThe user has been kicked 🦶",
@@ -264,6 +316,7 @@ var LocaleMap = map[string]map[string]string{
 		"cb.rp.nothing":                   "🐢 AHA you get nothing...",
 		"cb.rp.get.1":                     "🎉 You get ",
 		"cb.rp.get.2":                     " credit points. Congrats ～",
+		"cb.rp.captchaInvalid":            "❌ Wrong captcha code, you lose the change to get a redpacket ～",
 		"cb.rp.duplicated":                "❌ Duplicated draw, DONT BE VORACIOUS ~",
 		"cb.rp.notExists":                 "❌ The event is over, please engage next time ~",
 		"cb.lottery.start":                "🎉 The lottery is submitted.",
@@ -273,6 +326,7 @@ var LocaleMap = map[string]map[string]string{
 		"cb.notMiaoAdmin":                 "❌ Do not play with the button!",
 		"cb.notAdmin":                     "❌ Do not play with the button!",
 		"cb.noEvent":                      "❌ The event is not found.",
+		"cb.validationError":              "❌ The data is not validated.",
 		"cb.notParsed":                    "❌ The event is invalid.",
 		"cb.disabled":                     "❌ The group is not authorized.",
 	},
@@ -318,7 +372,7 @@ func GetUserLocale(c *tb.Chat, u *tb.User) string {
 
 	if c != nil {
 		gc := GetGroupConfig(c.ID)
-		if gc.Locale != "" && HasLocale(gc.Locale) {
+		if gc != nil && gc.Locale != "" && HasLocale(gc.Locale) {
 			return gc.Locale
 		}
 	}

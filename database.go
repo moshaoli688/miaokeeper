@@ -31,6 +31,43 @@ const (
 	UMDel
 )
 
+type OPReasons string
+
+const (
+	OPAll          OPReasons = ""
+	OPFlush        OPReasons = "FLUSH"
+	OPNormal       OPReasons = "NORMAL"
+	OPByAdmin      OPReasons = "ADMIN"
+	OPByAdminSet   OPReasons = "ADMINSET"
+	OPByRedPacket  OPReasons = "REDPACKET"
+	OPByLottery    OPReasons = "LOTTERY"
+	OPByTransfer   OPReasons = "TRANSFER"
+	OPByPolicy     OPReasons = "POLICY"
+	OPByAbuse      OPReasons = "ABUSE"
+	OPByAPIConsume OPReasons = "CONSUME"
+	OPByCleanUp    OPReasons = "CLEANUP"
+)
+
+var OPAllReasons = []OPReasons{OPAll, OPFlush, OPNormal, OPByAdmin, OPByAdminSet, OPByRedPacket, OPByLottery, OPByTransfer, OPByPolicy, OPByAbuse, OPByAPIConsume, OPByCleanUp}
+
+func (op *OPReasons) Repr() string {
+	if *op == OPAll {
+		return "ALL"
+	} else {
+		return string(*op)
+	}
+}
+
+func OPParse(s string) OPReasons {
+	for _, op := range OPAllReasons {
+		if string(op) == s {
+			return op
+		}
+	}
+
+	return OPAll
+}
+
 type CreditInfo struct {
 	Username string `json:"username"`
 	Name     string `json:"nickname"`
@@ -39,26 +76,19 @@ type CreditInfo struct {
 	GroupId  int64  `json:"groupId"`
 }
 
+type CreditLog struct {
+	ID        int64
+	UserID    int64
+	Credit    int64
+	Reason    OPReasons
+	CreatedAt time.Time
+}
+
 var GroupConfigCache map[int64]*GroupConfig
 var LotteryConfigCache map[string]*LotteryInstance
 
-type GroupConfig struct {
-	ID            int64
-	Admins        []int64
-	BannedForward []int64
-	MergeTo       int64
-
-	Locale           string
-	MustFollow       string
-	MustFollowOnJoin bool
-	MustFollowOnMsg  bool
-
-	AntiSpoiler bool
-	DisableWarn bool
-}
-
 func InitDatabase() (err error) {
-	MYSQLDB, err = sql.Open("mysql", DBCONN)
+	MYSQLDB, err = sql.Open("mysql", DBCONN+"?parseTime=true")
 	if err == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		err = MYSQLDB.PingContext(ctx)
@@ -160,7 +190,7 @@ func GetGroupConfig(groupId int64) *GroupConfig {
 		gc := &GroupConfig{}
 		err := jsoniter.Unmarshal([]byte(cfg), gc)
 		if err == nil {
-			GroupConfigCache[groupId] = gc
+			GroupConfigCache[groupId] = gc.Check()
 			return gc
 		}
 	}
@@ -169,6 +199,10 @@ func GetGroupConfig(groupId int64) *GroupConfig {
 
 func SetGroupConfig(groupId int64, gc *GroupConfig) *GroupConfig {
 	if !IsGroup(groupId) {
+		return nil
+	}
+
+	if groupId >= 0 {
 		return nil
 	}
 
@@ -197,17 +231,26 @@ func InitGroupTable(groupId int64) {
 		q.Close()
 	}
 
+	q, err = MYSQLDB.Query(fmt.Sprintf(`CREATE TABLE IF NOT EXISTS MiaoKeeper_Credit_Log_%d (
+		id BIGINT NOT NULL AUTO_INCREMENT,
+		userid BIGINT NOT NULL,
+		credit BIGINT NOT NULL,
+		op CHAR(16) NOT NULL,
+		createdat DATETIME DEFAULT CURRENT_TIMESTAMP,
+		INDEX (id),
+		INDEX (userid),
+		INDEX (op)
+	) DEFAULT CHARSET=utf8mb4`, Abs(groupId)))
+	if err != nil {
+		DErrorf("Table Creation Error | error=%v", err.Error())
+	}
+	if q != nil {
+		q.Close()
+	}
+
 	if GetGroupConfig(groupId) == nil {
 		NewGroupConfig(groupId)
 	}
-}
-
-func NewGroupConfig(groupId int64) *GroupConfig {
-	return SetGroupConfig(groupId, &GroupConfig{
-		ID:            groupId,
-		Admins:        make([]int64, 0),
-		BannedForward: make([]int64, 0),
-	})
 }
 
 func ReadConfigs() {
@@ -239,46 +282,6 @@ func UpdateAdmin(userId int64, method UpdateMethod) bool {
 	}
 	WriteConfigs()
 	return changed
-}
-
-func (gc *GroupConfig) UpdateAdmin(userId int64, method UpdateMethod) bool {
-	changed := false
-	if method == UMSet {
-		if len(gc.Admins) != 1 || gc.Admins[0] != userId {
-			changed = true
-			gc.Admins = []int64{userId}
-		}
-	} else if method == UMAdd {
-		gc.Admins, changed = AddIntoInt64Arr(gc.Admins, userId)
-	} else if method == UMDel {
-		gc.Admins, changed = DelFromInt64Arr(gc.Admins, userId)
-	}
-	SetGroupConfig(gc.ID, gc)
-	return changed
-}
-
-func (gc *GroupConfig) UpdateBannedForward(id int64, method UpdateMethod) bool {
-	changed := false
-	if method == UMSet {
-		if len(gc.BannedForward) != 1 || gc.BannedForward[0] != id {
-			changed = true
-			gc.BannedForward = []int64{id}
-		}
-	} else if method == UMAdd {
-		gc.BannedForward, changed = AddIntoInt64Arr(gc.BannedForward, id)
-	} else if method == UMDel {
-		gc.BannedForward, changed = DelFromInt64Arr(gc.BannedForward, id)
-	}
-	SetGroupConfig(gc.ID, gc)
-	return changed
-}
-
-func (gc *GroupConfig) IsAdmin(userId int64) bool {
-	return I64In(&gc.Admins, userId)
-}
-
-func (gc *GroupConfig) IsBannedForward(id int64) bool {
-	return I64In(&gc.BannedForward, id)
 }
 
 func UpdateGroup(groupId int64, method UpdateMethod) bool {
@@ -378,10 +381,62 @@ func FlushCredits(groupId int64, records [][]string) {
 		query.Close()
 	}
 
+	// writing logs
+	params = []interface{}{}
+	sqlCmd = fmt.Sprintf(`INSERT INTO MiaoKeeper_Credit_Log_%d (userid, credit, op) VALUES`, Abs(groupId))
+	for _, r := range records {
+		sqlCmd += ` (?, ?, ?),`
+		if len(r) >= 4 {
+			params = append(params, r[0], r[3], OPFlush)
+		}
+	}
+	sqlCmd = sqlCmd[0 : len(sqlCmd)-1]
+	query, err = MYSQLDB.Query(sqlCmd, params...)
+	if err != nil {
+		DErrorE(err, "Database Credit Log Flush Error")
+	}
+	if query != nil {
+		query.Close()
+	}
+
 	DInfof("Flush Credit | group=%d columns=%d", groupId, len(records))
 }
 
-func UpdateCredit(user *CreditInfo, method UpdateMethod, value int64) *CreditInfo {
+func QueryLogs(groupId int64, offset uint64, limit uint64, uid int64, before time.Time, vtype OPReasons) []CreditLog {
+	var ret = []CreditLog{}
+
+	id, userId, credit, reason := int64(0), int64(0), int64(0), OPAll
+	args := []interface{}{before}
+	addons := ""
+	if uid > 0 {
+		addons += " AND userid = ?"
+		args = append(args, uid)
+	}
+	if vtype != "" {
+		addons += " AND op = ?"
+		args = append(args, vtype)
+	}
+	args = append(args, limit, offset)
+
+	queryStr := fmt.Sprintf(`SELECT id, userid, credit, op, createdat FROM MiaoKeeper_Credit_Log_%d
+		WHERE createdat < ? %s
+		ORDER BY id DESC LIMIT ? OFFSET ?;`, Abs(groupId), addons)
+	row, _ := MYSQLDB.Query(queryStr, args...)
+
+	for row.Next() {
+		myTime := time.Now()
+		row.Scan(&id, &userId, &credit, &reason, &myTime)
+		if id > 0 {
+			ret = append(ret, CreditLog{id, userId, credit, reason, myTime})
+		}
+	}
+	row.Close()
+
+	DInfof("Query Logs | group=%d offset=%d limit=%d userId=%d before=%d reason=%s columns=%d", groupId, offset, limit, userId, before.Unix(), vtype, len(ret))
+	return ret
+}
+
+func UpdateCredit(user *CreditInfo, method UpdateMethod, value int64, reason OPReasons) *CreditInfo {
 	ci := GetCredit(user.GroupId, user.ID)
 	if user.Name == "" {
 		user.Name = ci.Name
@@ -399,6 +454,7 @@ func UpdateCredit(user *CreditInfo, method UpdateMethod, value int64) *CreditInf
 	}
 
 	var query *sql.Rows
+	var queryLogs *sql.Rows
 	var err error
 
 	realGroup := GetAliasedGroup(user.GroupId)
@@ -412,16 +468,23 @@ func UpdateCredit(user *CreditInfo, method UpdateMethod, value int64) *CreditInf
 				username = VALUES(username),
 				credit = VALUES(credit)
 			`, Abs(realGroup)), user.ID, user.Name, user.Username, user.Credit)
+		queryLogs, _ = MYSQLDB.Query(fmt.Sprintf(`INSERT INTO MiaoKeeper_Credit_Log_%d
+			(userid, credit, op) VALUES (?, ?, ?);`, Abs(user.GroupId)), user.ID, value, reason)
 	} else if realGroup == user.GroupId {
 		// when the method is UMDel, do not delete aliased credit
 		query, err = MYSQLDB.Query(fmt.Sprintf(`DELETE FROM MiaoKeeper_Credit_%d
 			WHERE userid = ?;`, Abs(user.GroupId)), user.ID)
+		queryLogs, _ = MYSQLDB.Query(fmt.Sprintf(`INSERT INTO MiaoKeeper_Credit_Log_%d
+			(userid, credit, op) VALUES (?, ?, ?);`, Abs(user.GroupId)), user.ID, -user.Credit, OPByCleanUp)
 	}
 	if err != nil {
 		DErrorE(err, "Database Credit Update Error")
 	}
 	if query != nil {
 		query.Close()
+	}
+	if queryLogs != nil {
+		queryLogs.Close()
 	}
 
 	DLogf("Update Credit | gid=%d rgid=%d user=%d alter=%d credit=%d", user.GroupId, realGroup, user.ID, method, value)
@@ -454,13 +517,13 @@ type LotteryInstance struct {
 func (li *LotteryInstance) UpdateTelegramMsg() *tb.Message {
 	btns := []string{}
 	if li.Status == 0 {
-		btns = append(btns, fmt.Sprintf("🤏 我要抽奖|lt/%d/1/%s", li.GroupID, li.ID))
+		btns = append(btns, fmt.Sprintf("🤏 我要抽奖|lt?t=1&id=%s", li.ID))
 	}
 	if li.Status >= 0 && li.Status < 2 {
-		btns = append(btns, fmt.Sprintf("📦 手动开奖[管理]|lt/%d/3/%s", li.GroupID, li.ID))
+		btns = append(btns, fmt.Sprintf("📦 手动开奖[管理]|lt?t=3&id=%s", li.ID))
 	}
 	if li.Status == -1 {
-		btns = append(btns, fmt.Sprintf("🎡 开启活动[管理]|lt/%d/2/%s", li.GroupID, li.ID))
+		btns = append(btns, fmt.Sprintf("🎡 开启活动[管理]|lt?t=2&id=%s", li.ID))
 	}
 	if li.MsgID > 0 && li.Status == 2 {
 		Bot.Delete(&tb.Message{ID: li.MsgID, Chat: &tb.Chat{ID: li.GroupID}})

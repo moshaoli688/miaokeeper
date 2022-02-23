@@ -24,6 +24,11 @@ type CheckDrawArgs struct {
 	LotteryId string
 }
 
+type UnbanUserArgs struct {
+	ChatId int64
+	UserId int64
+}
+
 func InitScheduler() {
 	lazyScheduler.Reg("deleteMessage", func(lsc *memutils.LazySchedulerCall) {
 		args := DeleteMessageArgs{}
@@ -57,11 +62,7 @@ func InitScheduler() {
 				cm, err := Bot.ChatMemberOf(fakeMsg.Chat, fakeMsg.Sender)
 				if err != nil || cm.Role == tb.Restricted || cm.Role == tb.Kicked || cm.Role == tb.Left {
 					KickOnce(fakeMsg.Chat.ID, fakeMsg.Sender.ID)
-					SmartSend(fakeMsg.Chat, fmt.Sprintf(Locale("channel.kicked", GetSenderLocale(fakeMsg)), fakeMsg.Sender.ID), &tb.SendOptions{
-						ParseMode:             "Markdown",
-						DisableWebPagePreview: true,
-						AllowWithoutReply:     true,
-					})
+					SmartSend(fakeMsg.Chat, fmt.Sprintf(Locale("channel.kicked", GetSenderLocale(fakeMsg)), fakeMsg.Sender.ID), WithMarkdown())
 				}
 			}
 		}
@@ -75,6 +76,14 @@ func InitScheduler() {
 			if li.Status != 2 {
 				li.CheckDraw(false)
 			}
+		}
+	})
+
+	lazyScheduler.Reg("unbanUser", func(lsc *memutils.LazySchedulerCall) {
+		args := UnbanUserArgs{}
+		lsc.Arg(&args)
+		if args.ChatId != 0 && args.UserId != 0 {
+			Bot.Unban(&tb.Chat{ID: args.ChatId}, &tb.User{ID: args.UserId}, true)
 		}
 	})
 }

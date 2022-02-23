@@ -48,13 +48,12 @@ func LogTypeToStr(lt LogType) string {
 }
 
 func PrintLogUnit(lu *LogUnit) {
-	if !VerboseMode && lu.Type == LTLog {
-		return
-	}
-	if lu.Type <= LTWarn {
-		fmt.Fprintf(os.Stdout, "%s | %s | %s", LogTypeToStr(lu.Type), lu.TimeStr, lu.Data)
-	} else {
-		fmt.Fprintf(os.Stderr, "%s | %s | %s", LogTypeToStr(lu.Type), lu.TimeStr, lu.Data)
+	if VerboseMode || (lu.Type == LTLog || lu.Type == LTError) {
+		if lu.Type <= LTWarn {
+			fmt.Fprintf(os.Stdout, "%s | %s | %s", LogTypeToStr(lu.Type), lu.TimeStr, lu.Data)
+		} else {
+			fmt.Fprintf(os.Stdout, "%s | %s | %s", LogTypeToStr(lu.Type), lu.TimeStr, lu.Data)
+		}
 	}
 }
 

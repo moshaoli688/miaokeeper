@@ -23,7 +23,7 @@ func CmdWarnUser(m *tb.Message) {
 				limSenderToken := fmt.Sprintf("lim%d,%d", m.Chat.ID, m.Sender.ID)
 				limReciverToken := fmt.Sprintf("lim%d,%d", m.Chat.ID, m.ReplyTo.Sender.ID)
 				if _, ok := zcomap.Get(token); ok {
-					addCredit(m.Chat.ID, m.Sender, -10, true)
+					addCredit(m.Chat.ID, m.Sender, -10, true, OPByAbuse)
 					SmartSend(m, Locale("cmd.zc.cooldown10", GetSenderLocale(m)))
 				} else if senderLimit, _ := zcomap.Get(limSenderToken); senderLimit >= 2 {
 					zcomap.Add(limReciverToken)
@@ -32,7 +32,7 @@ func CmdWarnUser(m *tb.Message) {
 					zcomap.Add(limSenderToken)
 					zcomap.Add(limReciverToken)
 					zcomap.Set(token, 1)
-					ci := addCredit(m.Chat.ID, m.ReplyTo.Sender, -25, true)
+					ci := addCredit(m.Chat.ID, m.ReplyTo.Sender, -25, true, OPByAbuse)
 					SmartSend(m.ReplyTo, fmt.Sprintf(Locale("cmd.zc.exec", GetSenderLocale(m)), GetUserName(m.ReplyTo.Sender), GetUserName(m.Sender)))
 					LazyDelete(m)
 					if ci.Credit < -50 {
@@ -81,13 +81,13 @@ func CmdBanUser(m *tb.Message) {
 				vtToken := fmt.Sprintf("vt-%d,%d", m.Chat.ID, userId)
 				token := fmt.Sprintf("ad-%d,%d", m.Chat.ID, m.Sender.ID)
 				if zcomap.Add(token) > 3 {
-					addCredit(m.Chat.ID, m.Sender, -5, true)
+					addCredit(m.Chat.ID, m.Sender, -5, true, OPByAbuse)
 					SmartSend(m, Locale("cmd.ey.cooldown5", GetSenderLocale(m)))
 				} else {
 					if _, ok := votemap.Get(vtToken); !ok {
 						if Ban(m.Chat.ID, userId, 1800) == nil {
-							addCredit(m.Chat.ID, m.ReplyTo.Sender, -50, true)
-							addCredit(m.Chat.ID, m.Sender, 15, true)
+							addCredit(m.Chat.ID, m.ReplyTo.Sender, -50, true, OPByAbuse)
+							addCredit(m.Chat.ID, m.Sender, 15, true, OPByAbuse)
 							votemap.Set(vtToken, 0)
 							msgTxt := fmt.Sprintf(Locale("cmd.ey.exec", GetSenderLocale(m)), GetUserName(m.ReplyTo.Sender), GetUserName(m.Sender))
 							SendBtns(m.ReplyTo, msgTxt, "", GenVMBtns(0, m.Chat.ID, userId, m.Sender.ID))

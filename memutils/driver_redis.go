@@ -17,7 +17,7 @@ type MemDriverRedis struct {
 
 func (md *MemDriverRedis) Init(kargs ...string) {
 	if len(kargs) < 2 {
-		Log(os.Stderr, "MemDriver Error | Should have two parameters to indicate host and password")
+		Log(os.Stdout, "MemDriver Error | Should have two parameters to indicate host and password")
 		os.Exit(1)
 	}
 
@@ -29,7 +29,7 @@ func (md *MemDriverRedis) Init(kargs ...string) {
 	})
 
 	if err := md.rdb.Ping(md.ctx).Err(); err != nil {
-		Log(os.Stderr, "MemDriver Error | Cannot ping server: "+err.Error())
+		Log(os.Stdout, "MemDriver Error | Cannot ping server: "+err.Error())
 		os.Exit(1)
 	}
 }
@@ -52,7 +52,7 @@ func (md *MemDriverRedis) Write(key string, value interface{}, expire time.Durat
 
 func (md *MemDriverRedis) Inc(key string, expire time.Duration, overwriteTTLIfExists bool) int {
 	if !overwriteTTLIfExists {
-		if duration, err := md.rdb.TTL(md.ctx, key).Result(); err == nil {
+		if duration, err := md.rdb.TTL(md.ctx, key).Result(); err == nil && duration > time.Second {
 			expire = duration
 		}
 	}

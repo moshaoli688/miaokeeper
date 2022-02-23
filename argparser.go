@@ -22,7 +22,7 @@ func (ah *ArgHolder) Parse(payload string) string {
 				ah.storage[k] = true
 			} else if strings.Contains("n N no NO false FALSE", kv[1]) {
 				ah.storage[k] = false
-			} else if i, err := strconv.Atoi(kv[1]); err == nil {
+			} else if i, err := strconv.ParseInt(kv[1], 10, 64); err == nil {
 				ah.storage[k] = i
 			} else {
 				ah.storage[k] = kv[1]
@@ -34,9 +34,16 @@ func (ah *ArgHolder) Parse(payload string) string {
 	return strings.TrimSpace(strings.Join(keptArgs, " "))
 }
 
+func (ah *ArgHolder) Int64(key string) (int64, bool) {
+	if Type(ah.storage[key]) == reflect.Int64.String() {
+		return ah.storage[key].(int64), true
+	}
+	return 0, false
+}
+
 func (ah *ArgHolder) Int(key string) (int, bool) {
-	if Type(ah.storage[key]) == reflect.Int.String() {
-		return ah.storage[key].(int), true
+	if v64, ok := ah.Int64(key); ok {
+		return int(v64), true
 	}
 	return 0, false
 }

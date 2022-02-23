@@ -26,41 +26,47 @@ func GinData(data interface{}) gin.H {
 	}
 }
 
-func GinParseGroupAndUser(c *gin.Context) *CreditInfo {
-	groupId, _ := strconv.ParseInt(c.Param("groupId"), 10, 64)
+func GinParseUser(c *gin.Context) *CreditInfo {
 	userId, _ := strconv.ParseInt(c.Param("userId"), 10, 64)
-
-	if groupId < 0 && userId > 0 {
-		DLogf("API Gateway | Route credit group=%d user=%d", groupId, userId)
-
-		if gc := GetGroupConfig(groupId); gc != nil {
-			if ci := GetCredit(groupId, userId); ci != nil && ci.ID == userId {
-				return ci
-			} else {
-				c.JSON(http.StatusNotFound, GinError("the user does not exist."))
-			}
+	if groupId := c.GetInt64("gid"); groupId != 0 {
+		if ci := GetCredit(groupId, userId); ci != nil && ci.ID == userId {
+			return ci
 		} else {
-			c.JSON(http.StatusNotFound, GinError("the group does not exist."))
+			c.JSON(http.StatusNotFound, GinError("the user does not exist."))
 		}
 	} else {
-		c.JSON(http.StatusBadRequest, GinError("either groupId or userId is invalid."))
+		c.JSON(http.StatusNotFound, GinError("unexpected error."))
 	}
 
 	return nil
 }
 
-func MiddlewareAuthorization(token string) gin.HandlerFunc {
+func MiddlewareGroupAuthorization() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if token == "" || c.GetHeader("Authorization") == token {
-			c.Next()
+		groupId, _ := strconv.ParseInt(c.Param("groupId"), 10, 64)
+		if groupId < 0 {
+			if gc := GetGroupConfig(groupId); gc != nil {
+				if gc.GenerateSign(GST_API_SIGN) == c.GetHeader("Authorization") {
+					c.Set("gc", gc)
+					c.Set("gid", groupId)
+
+					c.Next()
+					return
+				} else {
+					c.JSON(http.StatusUnauthorized, GinError("authorization failed."))
+				}
+			} else {
+				c.JSON(http.StatusNotFound, GinError("the group does not exist."))
+			}
 		} else {
-			c.JSON(http.StatusUnauthorized, GinError("authorization failed."))
-			c.Abort()
+			c.JSON(http.StatusBadRequest, GinError("the group id is not valid."))
 		}
+
+		c.Abort()
 	}
 }
 
-func InitRESTServer(portNum int, token string) {
+func InitRESTServer(portNum int) {
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.New()
@@ -70,38 +76,40 @@ func InitRESTServer(portNum int, token string) {
 		c.JSON(http.StatusNotFound, GinError("endpoint not found"))
 	})
 
-	authorized := r.Group("/")
-	authorized.Use(MiddlewareAuthorization(token))
-
-	apiVersionOne := authorized.Group("/v1")
+	apiVersionOne := r.Group("/v1")
 	{
-		credit := apiVersionOne.Group("/credit")
-		credit.GET("/:groupId/:userId", func(c *gin.Context) {
-			if ci := GinParseGroupAndUser(c); ci != nil {
-				c.JSON(http.StatusOK, GinData(ci))
-			}
-		})
-		credit.POST("/:groupId/:userId/consume", func(c *gin.Context) {
-			consumeLock.Lock()
-			defer consumeLock.Unlock()
-
-			if ci := GinParseGroupAndUser(c); ci != nil {
-				consumeRequest := struct {
-					Credit int64 `json:"credit,omitempty"`
-				}{}
-				c.BindJSON(&consumeRequest)
-				if consumeRequest.Credit > 0 {
-					if ci.Credit >= consumeRequest.Credit {
-						ci = UpdateCredit(ci, UMAdd, -consumeRequest.Credit)
-						c.JSON(http.StatusOK, GinData(ci))
-					} else {
-						c.JSON(http.StatusNotAcceptable, GinError("the user does not have enough credit."))
-					}
-				} else {
-					c.JSON(http.StatusBadRequest, GinError("consume credit should be a positive number."))
+		authorizedGroup := apiVersionOne.Group("/group/:groupId")
+		authorizedGroup.Use(MiddlewareGroupAuthorization())
+		{
+			credit := authorizedGroup.Group("/credit")
+			credit.GET("/:userId", func(c *gin.Context) {
+				if ci := GinParseUser(c); ci != nil {
+					c.JSON(http.StatusOK, GinData(ci))
 				}
-			}
-		})
+			})
+			credit.POST("/:userId/consume", func(c *gin.Context) {
+				consumeLock.Lock()
+				defer consumeLock.Unlock()
+
+				if ci := GinParseUser(c); ci != nil {
+					consumeRequest := struct {
+						Credit        int64 `json:"credit,omitempty"`
+						AllowNegative bool  `json:"allowNegative,omitempty"`
+					}{}
+					c.BindJSON(&consumeRequest)
+					if consumeRequest.Credit > 0 {
+						if ci.Credit >= consumeRequest.Credit || (ci.Credit > 0 && consumeRequest.AllowNegative) {
+							ci = UpdateCredit(ci, UMAdd, -consumeRequest.Credit, OPByAPIConsume)
+							c.JSON(http.StatusOK, GinData(ci))
+						} else {
+							c.JSON(http.StatusNotAcceptable, GinError("the user does not have enough credit."))
+						}
+					} else {
+						c.JSON(http.StatusBadRequest, GinError("consume credit should be a positive number."))
+					}
+				}
+			})
+		}
 	}
 
 	go func() {

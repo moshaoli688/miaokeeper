@@ -67,7 +67,7 @@ func (ls *LazyScheduler) Recover() {
 			counter += 1
 		}
 	}
-	Log(os.Stdout, fmt.Sprintf("Lazy Scheduler | Recovered %d tasks from cache\n", counter))
+	Log(os.Stdout, fmt.Sprintf("System | Recovered %d tasks from cache\n", counter))
 }
 
 func (ls *LazyScheduler) After(duration time.Duration, call *LazySchedulerCall) {

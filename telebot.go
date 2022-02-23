@@ -26,7 +26,7 @@ var TOKEN = ""
 var TELEGRAMURL = ""
 
 var APIBind = 0
-var APIToken = ""
+var APISeed = ""
 
 var GROUPS = []int64{}
 var ADMINS = []int64{}
@@ -44,12 +44,15 @@ var joinmap *ObliviousMapInt
 var redpacketrankmap *ObliviousMapStr
 var redpacketmap *ObliviousMapInt
 var redpacketnmap *ObliviousMapInt
+var redpacketcaptcha *ObliviousMapStr
 
 var debouncer func(func())
 var lazyScheduler *memutils.LazyScheduler
 
-var callbacklock sync.Mutex
 var usercreditlock sync.Mutex
+
+var DefaultWarnKeywords = []string{"口臭", "口 臭", "口  臭", "口臭!", "口臭！", "嘴臭", "嘴 臭", "嘴  臭", "嘴臭!", "嘴臭！"}
+var DefaultBanKeywords = []string{"恶意广告", "惡意廣告", "恶意发言", "惡意發言", "恶意举报", "惡意舉報", "惡意檢舉", "恶意嘴臭", "恶意口臭"}
 
 func InitTelegram() {
 	var err error
@@ -76,6 +79,16 @@ func InitTelegram() {
 		},
 		URL: TELEGRAMURL,
 	})
+
+	if err != nil {
+		DErrorf("TeleBot Error | cannot initialize bot | err=%s", err.Error())
+		os.Exit(1)
+	}
+
+	if Bot == nil {
+		DErrorf("TeleBot Error | cannot initialize bot | err=Unknown error")
+		os.Exit(1)
+	}
 
 	if !PingArg && !CleanArg {
 
@@ -106,11 +119,15 @@ func InitTelegram() {
 		Bot.Handle("/su_del_group", CmdSuDelGroup)
 		Bot.Handle("/su_add_admin", CmdSuAddAdmin)
 		Bot.Handle("/su_del_admin", CmdSuDelAdmin)
+		Bot.Handle("/su_quit_group", CmdSuQuitGroup)
 
 		// ---------------- Group Admin ----------------
 
 		Bot.Handle("/add_admin", CmdAddAdmin)
 		Bot.Handle("/del_admin", CmdDelAdmin)
+		Bot.Handle("/import_policy", CmdSetPolicy)
+		Bot.Handle("/export_policy", CmdGetPolicy)
+		Bot.Handle("/export_token", CmdGetToken)
 		Bot.Handle("/ban_forward", CmdBanForward)
 		Bot.Handle("/unban_forward", CmdUnbanForward)
 		Bot.Handle("/set_credit", CmdSetCredit)
@@ -119,10 +136,10 @@ func InitTelegram() {
 		Bot.Handle("/set_antispoiler", CmdSetAntiSpoiler)
 		Bot.Handle("/set_channel", CmdSetChannel)
 		Bot.Handle("/set_locale", CmdSetLocale)
-		Bot.Handle("/send_redpacket", CmdSendRedpacket)
 		Bot.Handle("/create_lottery", CmdCreateLottery)
 
 		Bot.Handle("/creditrank", CmdCreditRank)
+		Bot.Handle("/creditlog", CmdCreditLog)
 		Bot.Handle("/redpacket", CmdRedpacket)
 		Bot.Handle("/lottery", CmdLottery)
 		Bot.Handle("/transfer", CmdCreditTransfer)
@@ -135,28 +152,8 @@ func InitTelegram() {
 
 		Bot.Handle("/mycredit", CmdMyCredit)
 		Bot.Handle("/version", CmdVersion)
+		Bot.Handle("/id", CmdID)
 		Bot.Handle("/ping", CmdPing)
-
-		Bot.Handle("口臭", CmdWarnUser)
-		Bot.Handle("口 臭", CmdWarnUser)
-		Bot.Handle("口  臭", CmdWarnUser)
-		Bot.Handle("口臭!", CmdWarnUser)
-		Bot.Handle("口臭！", CmdWarnUser)
-		Bot.Handle("嘴臭", CmdWarnUser)
-		Bot.Handle("嘴 臭", CmdWarnUser)
-		Bot.Handle("嘴  臭", CmdWarnUser)
-		Bot.Handle("嘴臭!", CmdWarnUser)
-		Bot.Handle("嘴臭！", CmdWarnUser)
-
-		Bot.Handle("恶意广告", CmdBanUser)
-		Bot.Handle("惡意廣告", CmdBanUser)
-		Bot.Handle("恶意发言", CmdBanUser)
-		Bot.Handle("惡意發言", CmdBanUser)
-		Bot.Handle("恶意举报", CmdBanUser)
-		Bot.Handle("惡意舉報", CmdBanUser)
-		Bot.Handle("惡意檢舉", CmdBanUser)
-		Bot.Handle("恶意嘴臭", CmdBanUser)
-		Bot.Handle("恶意口臭", CmdBanUser)
 
 		Bot.Handle(tb.OnUserLeft, CmdOnUserLeft)
 		Bot.Handle(tb.OnChatMember, CmdOnChatMember)
@@ -173,17 +170,18 @@ func InitTelegram() {
 		Bot.Handle(tb.OnText, CmdOnText)
 		Bot.Handle(tb.OnSticker, CmdOnSticker)
 
+		InitCallback()
 	}
 
 	go Bot.Start()
 
 	if !PingArg {
-		DInfo("MiaoKeeper is up.")
+		DInfo("System | MiaoKeeper bot is up.")
 		lazyScheduler.Recover()
 	}
 
 	if CleanArg {
-		DInfo("Clean mode is on.")
+		DInfo("System | Clean mode is on.")
 	}
 }
 
@@ -217,6 +215,7 @@ func InitTelegramArgs() {
 	redpacketrankmap = NewOMapStr("rprank/", time.Hour*24, false, memdriver)
 	redpacketmap = NewOMapInt("rp/", time.Hour*24, false, memdriver)
 	redpacketnmap = NewOMapInt("rpname/", time.Hour*24, false, memdriver)
+	redpacketcaptcha = NewOMapStr("rpcaptcha/", time.Hour*24, false, memdriver)
 
 	debouncer = debounce.New(time.Second)
 	lazyScheduler = memutils.NewLazyScheduler(memdriver)
