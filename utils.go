@@ -94,11 +94,32 @@ func MaxInt(a, b int) int {
 	return a
 }
 
+func MinInt64(a, b int64) int64 {
+	if a > b {
+		return b
+	}
+	return a
+}
+
+func MaxInt64(a, b int64) int64 {
+	if a < b {
+		return b
+	}
+	return a
+}
+
 func Abs(a int64) int64 {
 	if a >= 0 {
 		return a
 	}
 	return -a
+}
+
+func ParseInt64(s string) int64 {
+	if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return i
+	}
+	return 0
 }
 
 func Type(to interface{}) string {
@@ -156,4 +177,28 @@ func POSTJsonWithSign(url string, sign string, payload []byte, timeout time.Dura
 	}
 
 	return body
+}
+
+func WarpError(fn func()) (err error) {
+	defer func() {
+		if erro := recover(); erro != nil {
+			switch x := erro.(type) {
+			case string:
+				err = fmt.Errorf(x)
+			case error:
+				err = x
+			default:
+				err = fmt.Errorf("unknown error")
+			}
+		}
+	}()
+
+	fn()
+	return
+}
+
+func PlainError(info string, err error) {
+	if err != nil {
+		DErrorf("Unexpected Error | %s error=%v", info, err.Error())
+	}
 }

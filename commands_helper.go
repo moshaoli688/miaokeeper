@@ -13,7 +13,7 @@ import (
 
 	"github.com/BBAlliance/miaokeeper/memutils"
 	jsoniter "github.com/json-iterator/go"
-	tb "gopkg.in/tucnak/telebot.v2"
+	tb "gopkg.in/telebot.v3"
 )
 
 func SendRedPacket(to interface{}, chatId int64, packetId int64, photo *bytes.Buffer) (*tb.Message, error) {
@@ -105,6 +105,9 @@ func CheckSpoiler(m *tb.Message) bool {
 func CheckChannelFollow(m *tb.Message, user *tb.User, isJoin bool) bool {
 	showExceptDialog := isJoin
 	if gc := GetGroupConfig(m.Chat.ID); gc != nil && gc.MustFollow != "" {
+		if IsAdmin(user.ID) || gc.IsAdmin(user.ID) {
+			return true
+		}
 		if isJoin && !gc.MustFollowOnJoin {
 			return true
 		}
@@ -126,7 +129,7 @@ func CheckChannelFollow(m *tb.Message, user *tb.User, isJoin bool) bool {
 			return true
 		}
 
-		usrStatus := UserIsInGroup(gc.MustFollow, user.ID)
+		usrStatus, _ := UserIsInGroup(gc.MustFollow, user.ID)
 		if usrStatus == UIGIn {
 			if showExceptDialog {
 				SmartSendDelete(m.Chat, fmt.Sprintf(Locale("channel.user.alreadyFollowed", GetSenderLocale(m)), usrName))
@@ -139,32 +142,55 @@ func CheckChannelFollow(m *tb.Message, user *tb.User, isJoin bool) bool {
 				Bot.Delete(m)
 				return false
 			}
-			msg, err := SendBtnsMarkdown(m.Chat, fmt.Sprintf(Locale("channel.request", GetSenderLocale(m)), userId, usrName), "", []string{
-				fmt.Sprintf(Locale("btn.channel.step1", GetSenderLocale(m)), strings.TrimLeft(gc.MustFollow, "@")),
-				fmt.Sprintf(Locale("btn.channel.step2", GetSenderLocale(m)), userId),
-				fmt.Sprintf(Locale("btn.adminPanel", GetSenderLocale(m)), userId, 0, userId, 0),
-			})
+			validationDelay := 300
+			if gc.UnderAttackMode {
+				validationDelay = 30
+			}
+
+			inviteLink := ""
+			if strings.HasPrefix(gc.MustFollow, "@") {
+				inviteLink = "https://t.me/" + strings.TrimLeft(gc.MustFollow, "@")
+			} else if followId, err := strconv.ParseInt(gc.MustFollow, 10, 64); err == nil && followId < 0 {
+				if followChat, err := Bot.ChatByID(followId); err == nil && followChat != nil {
+					if followChat.InviteLink != "" {
+						inviteLink = followChat.InviteLink
+					} else {
+						inviteLink, _ = Bot.InviteLink(followChat)
+					}
+				}
+			}
+
+			var msg *tb.Message
+			var err error
+
+			if inviteLink != "" {
+				msg, err = SendBtnsMarkdown(m.Chat, fmt.Sprintf(Locale("channel.request", GetSenderLocale(m)), userId, usrName, validationDelay), "", []string{
+					fmt.Sprintf(Locale("btn.channel.step1", GetSenderLocale(m)), inviteLink),
+					fmt.Sprintf(Locale("btn.channel.step2", GetSenderLocale(m)), userId),
+					fmt.Sprintf(Locale("btn.adminPanel", GetSenderLocale(m)), userId, 0, userId, 0),
+				})
+			}
+
 			if msg == nil || err != nil {
 				if showExceptDialog {
 					SmartSendDelete(m.Chat, Locale("channel.cannotSendMsg", GetSenderLocale(m)))
 				}
 				joinmap.Unset(joinVerificationId)
 			} else {
-				if Ban(chatId, userId, 0) != nil {
+				Bot.Delete(m)
+				if banErr := Ban(chatId, userId, 0); banErr != nil {
+					DErrorEf(banErr, "Verification Error | Ban error")
+					SmartEdit(msg, Locale("channel.cannotBanUser", GetSenderLocale(m)))
 					LazyDelete(msg)
-					if showExceptDialog {
-						SmartSendDelete(m.Chat, Locale("channel.cannotBanUser", GetSenderLocale(m)))
-					}
 					joinmap.Unset(joinVerificationId)
 				} else {
-					lazyScheduler.After(time.Minute*5, memutils.LSC("inGroupVerify", &InGroupVerifyArgs{
+					lazyScheduler.After(time.Second*time.Duration(validationDelay), memutils.LSC("inGroupVerify", &InGroupVerifyArgs{
 						ChatId:         chatId,
 						UserId:         userId,
 						MessageId:      msg.ID,
 						VerificationId: joinVerificationId,
 						LanguageCode:   user.LanguageCode,
 					}))
-					Bot.Delete(m)
 					return false
 				}
 			}
@@ -291,9 +317,10 @@ func addCreditToMsgSender(chatId int64, m *tb.Message, credit int64, force bool,
 }
 
 func addCredit(chatId int64, user *tb.User, credit int64, force bool, reason OPReasons) *CreditInfo {
-	if chatId < 0 && user != nil && user.ID > 0 && credit != 0 {
+	gc := GetGroupConfig(chatId)
+	if gc != nil && user != nil && user.ID > 0 && credit != 0 {
 		token := fmt.Sprintf("ac-%d-%d", chatId, user.ID)
-		if creditomap.Add(token) < 20 || force { // can only get credit 20 times / hour
+		if force || creditomap.AddBy(token, int(credit)) <= int(gc.CreditMapping.HourlyUpperBound) {
 			return UpdateCredit(BuildCreditInfo(chatId, user, false), UMAdd, credit, reason)
 		}
 	}
@@ -314,7 +341,7 @@ func ValidUser(u *tb.User) bool {
 
 func BuildCreditInfo(groupId int64, user *tb.User, autoFetch bool) *CreditInfo {
 	ci := &CreditInfo{
-		user.Username, GetUserName(user), user.ID, 0, groupId,
+		user.ID, user.Username, GetUserName(user), 0, groupId,
 	}
 	if autoFetch {
 		ci.Credit = GetCredit(groupId, user.ID).Credit
@@ -377,37 +404,37 @@ func SendBtns(to interface{}, what interface{}, prefix string, btns []string) (*
 		DisableWebPagePreview: true,
 		AllowWithoutReply:     true,
 	}, &tb.ReplyMarkup{
-		OneTimeKeyboard:     true,
-		ResizeReplyKeyboard: true,
-		ForceReply:          false,
-		InlineKeyboard:      MakeBtns(prefix, btns),
+		OneTimeKeyboard: true,
+		ResizeKeyboard:  true,
+		ForceReply:      false,
+		InlineKeyboard:  MakeBtns(prefix, btns),
 	})
 }
 
 func SendBtnsMarkdown(to interface{}, what interface{}, prefix string, btns []string) (*tb.Message, error) {
 	return SmartSendInner(to, what, WithMarkdown(), &tb.ReplyMarkup{
-		OneTimeKeyboard:     true,
-		ResizeReplyKeyboard: true,
-		ForceReply:          false,
-		InlineKeyboard:      MakeBtns(prefix, btns),
+		OneTimeKeyboard: true,
+		ResizeKeyboard:  true,
+		ForceReply:      false,
+		InlineKeyboard:  MakeBtns(prefix, btns),
 	})
 }
 
 func EditBtns(to *tb.Message, what interface{}, prefix string, btns []string) (*tb.Message, error) {
 	return SmartEdit(to, what, &tb.ReplyMarkup{
-		OneTimeKeyboard:     true,
-		ResizeReplyKeyboard: true,
-		ForceReply:          false,
-		InlineKeyboard:      MakeBtns(prefix, btns),
+		OneTimeKeyboard: true,
+		ResizeKeyboard:  true,
+		ForceReply:      false,
+		InlineKeyboard:  MakeBtns(prefix, btns),
 	})
 }
 
 func EditBtnsMarkdown(to *tb.Message, what interface{}, prefix string, btns []string) (*tb.Message, error) {
 	return SmartEdit(to, what, WithMarkdown(), &tb.ReplyMarkup{
-		OneTimeKeyboard:     true,
-		ResizeReplyKeyboard: true,
-		ForceReply:          false,
-		InlineKeyboard:      MakeBtns(prefix, btns),
+		OneTimeKeyboard: true,
+		ResizeKeyboard:  true,
+		ForceReply:      false,
+		InlineKeyboard:  MakeBtns(prefix, btns),
 	})
 }
 
@@ -458,10 +485,10 @@ func SmartSendWithBtns(to interface{}, what interface{}, buttons []string, optio
 
 	if len(buttons) > 0 {
 		withOptions = append(withOptions, &tb.ReplyMarkup{
-			OneTimeKeyboard:     true,
-			ResizeReplyKeyboard: true,
-			ForceReply:          true,
-			InlineKeyboard:      MakeButtons(buttons),
+			OneTimeKeyboard: true,
+			ResizeKeyboard:  true,
+			ForceReply:      true,
+			InlineKeyboard:  MakeButtons(buttons),
 		})
 	}
 	return SmartSendInner(to, what, withOptions...)
@@ -588,31 +615,35 @@ func GetQuotableChatName(u *tb.Chat) string {
 	return GetQuotableStr(GetChatName(u))
 }
 
-func UserIsInGroup(chatRepr string, userId int64) UIGStatus {
+func UserIsInGroup(chatRepr string, userId int64) (UIGStatus, tb.MemberStatus) {
 	cm, err := ChatMemberOf(chatRepr, Bot.Me.ID)
 	if err != nil {
-		return UIGErr
+		return UIGErr, ""
 	} else if cm.Role != tb.Administrator && cm.Role != tb.Creator {
-		return UIGErr
+		return UIGErr, ""
 	}
 
 	if userId == Bot.Me.ID {
-		return UIGIn
+		return UIGIn, cm.Role
 	}
 
 	cm, err = ChatMemberOf(chatRepr, userId)
-	// if is admin, pass
-	if cm.Anonymous || cm.Role == tb.Administrator || cm.Role == tb.Creator {
-		return UIGIn
+	if err != nil || cm == nil {
+		return UIGOut, ""
 	}
 
-	if err != nil || cm == nil {
-		return UIGOut
+	// if is admin, pass
+	if cm.Anonymous || cm.Role == tb.Administrator || cm.Role == tb.Creator {
+		return UIGIn, cm.Role
 	}
+
 	if cm.Role == tb.Left || cm.Role == tb.Kicked {
-		return UIGOut
+		return UIGOut, cm.Role
 	}
-	return UIGIn
+	if cm.Role == tb.Restricted {
+		return UIGOut, cm.Role
+	}
+	return UIGIn, cm.Role
 }
 
 func ChatMemberOf(chatRepr string, userId int64) (*tb.ChatMember, error) {

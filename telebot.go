@@ -10,15 +10,15 @@ import (
 
 	"github.com/BBAlliance/miaokeeper/memutils"
 	"github.com/bep/debounce"
-	tb "gopkg.in/tucnak/telebot.v2"
+	tb "gopkg.in/telebot.v3"
 )
 
-type UIGStatus int
+type UIGStatus string
 
 const (
-	UIGIn UIGStatus = iota
-	UIGOut
-	UIGErr
+	UIGIn  UIGStatus = "InGroup"
+	UIGOut UIGStatus = "OutOfGroup"
+	UIGErr UIGStatus = "Error"
 )
 
 var Bot *tb.Bot
@@ -74,7 +74,7 @@ func InitTelegram() {
 				// "poll_answer",
 				"my_chat_member",
 				"chat_member",
-				// "chat_join_request",
+				"chat_join_request",
 			},
 		},
 		URL: TELEGRAMURL,
@@ -114,61 +114,65 @@ func InitTelegram() {
 
 		// ---------------- Super Admin ----------------
 
-		Bot.Handle("/su_export_credit", CmdSuExportCredit)
-		Bot.Handle("/su_add_group", CmdSuAddGroup)
-		Bot.Handle("/su_del_group", CmdSuDelGroup)
-		Bot.Handle("/su_add_admin", CmdSuAddAdmin)
-		Bot.Handle("/su_del_admin", CmdSuDelAdmin)
-		Bot.Handle("/su_quit_group", CmdSuQuitGroup)
+		HandleLagacy("/su_export_credit", CmdSuExportCredit)
+		HandleLagacy("/su_add_group", CmdSuAddGroup)
+		HandleLagacy("/su_del_group", CmdSuDelGroup)
+		HandleLagacy("/su_add_admin", CmdSuAddAdmin)
+		HandleLagacy("/su_del_admin", CmdSuDelAdmin)
+		HandleLagacy("/su_quit_group", CmdSuQuitGroup)
 
 		// ---------------- Group Admin ----------------
 
-		Bot.Handle("/add_admin", CmdAddAdmin)
-		Bot.Handle("/del_admin", CmdDelAdmin)
-		Bot.Handle("/import_policy", CmdSetPolicy)
-		Bot.Handle("/export_policy", CmdGetPolicy)
-		Bot.Handle("/export_token", CmdGetToken)
-		Bot.Handle("/ban_forward", CmdBanForward)
-		Bot.Handle("/unban_forward", CmdUnbanForward)
-		Bot.Handle("/set_credit", CmdSetCredit)
-		Bot.Handle("/add_credit", CmdAddCredit)
-		Bot.Handle("/check_credit", CmdCheckCredit)
-		Bot.Handle("/set_antispoiler", CmdSetAntiSpoiler)
-		Bot.Handle("/set_channel", CmdSetChannel)
-		Bot.Handle("/set_locale", CmdSetLocale)
-		Bot.Handle("/create_lottery", CmdCreateLottery)
+		HandleLagacy("/set", CmdSetConfig)
+		HandleLagacy("/get", CmdGetConfig)
+		HandleLagacy("/add_admin", CmdAddAdmin)
+		HandleLagacy("/del_admin", CmdDelAdmin)
+		HandleLagacy("/import_policy", CmdSetPolicy)
+		HandleLagacy("/export_policy", CmdGetPolicy)
+		HandleLagacy("/export_token", CmdGetToken)
+		HandleLagacy("/ban_forward", CmdBanForward)
+		HandleLagacy("/unban_forward", CmdUnbanForward)
+		HandleLagacy("/set_credit", CmdSetCredit)
+		HandleLagacy("/add_credit", CmdAddCredit)
+		HandleLagacy("/check_credit", CmdCheckCredit)
+		HandleLagacy("/set_antispoiler", CmdSetAntiSpoiler)
+		HandleLagacy("/set_channel", CmdSetChannel)
+		HandleLagacy("/set_locale", CmdSetLocale)
+		HandleLagacy("/create_lottery", CmdCreateLottery)
 
-		Bot.Handle("/creditrank", CmdCreditRank)
-		Bot.Handle("/creditlog", CmdCreditLog)
-		Bot.Handle("/redpacket", CmdRedpacket)
-		Bot.Handle("/lottery", CmdLottery)
-		Bot.Handle("/transfer", CmdCreditTransfer)
+		HandleLagacy("/creditrank", CmdCreditRank)
+		HandleLagacy("/creditlog", CmdCreditLog)
+		HandleLagacy("/redpacket", CmdRedpacket)
+		HandleLagacy("/lottery", CmdLottery)
+		HandleLagacy("/transfer", CmdCreditTransfer)
 
 		// ---------------- Normal User ----------------
 
-		Bot.Handle("/ban_user", CmdBanUserCommand)
-		Bot.Handle("/unban_user", CmdUnbanUserCommand)
-		Bot.Handle("/kick_user", CmdKickUserCommand)
+		HandleLagacy("/ban_user", CmdBanUserCommand)
+		HandleLagacy("/unban_user", CmdUnbanUserCommand)
+		HandleLagacy("/kick_user", CmdKickUserCommand)
 
-		Bot.Handle("/mycredit", CmdMyCredit)
-		Bot.Handle("/version", CmdVersion)
-		Bot.Handle("/id", CmdID)
-		Bot.Handle("/ping", CmdPing)
+		HandleLagacy("/mycredit", CmdMyCredit)
+		HandleLagacy("/version", CmdVersion)
+		HandleLagacy("/info", CmdInfo)
+		HandleLagacy("/ping", CmdPing)
 
-		Bot.Handle(tb.OnUserLeft, CmdOnUserLeft)
+		HandleLagacy(tb.OnUserLeft, CmdOnUserLeft)
+		HandleLagacy(tb.OnUserJoined, CmdOnUserJoined)
+		HandleLagacy(tb.OnPinned, CmdOnPinned)
+
+		HandleLagacy(tb.OnPhoto, CmdOnMisc)
+		HandleLagacy(tb.OnAnimation, CmdOnMisc)
+		HandleLagacy(tb.OnVideo, CmdOnMisc)
+		HandleLagacy(tb.OnEdited, CmdOnMisc)
+		HandleLagacy(tb.OnDocument, CmdOnDocument)
+
+		HandleLagacy(tb.OnText, CmdOnText)
+		HandleLagacy(tb.OnSticker, CmdOnSticker)
+
 		Bot.Handle(tb.OnChatMember, CmdOnChatMember)
-		Bot.Handle(tb.OnUserJoined, CmdOnUserJoined)
-		Bot.Handle(tb.OnPinned, CmdOnPinned)
-
+		Bot.Handle(tb.OnChatJoinRequest, CmdOnChatJoinRequest)
 		Bot.Handle(tb.OnCallback, CmdOnCallback)
-		Bot.Handle(tb.OnPhoto, CmdOnMisc)
-		Bot.Handle(tb.OnAnimation, CmdOnMisc)
-		Bot.Handle(tb.OnVideo, CmdOnMisc)
-		Bot.Handle(tb.OnEdited, CmdOnMisc)
-		Bot.Handle(tb.OnDocument, CmdOnDocument)
-
-		Bot.Handle(tb.OnText, CmdOnText)
-		Bot.Handle(tb.OnSticker, CmdOnSticker)
 
 		InitCallback()
 	}
@@ -182,6 +186,20 @@ func InitTelegram() {
 
 	if CleanArg {
 		DInfo("System | Clean mode is on.")
+	}
+}
+
+// handle lagacy message instance
+func HandleLagacy(key string, handler func(*tb.Message)) {
+	if key != "" && handler != nil {
+		Bot.Handle(key, func(c tb.Context) error {
+			return WarpError(func() {
+				m := c.Message()
+				if m != nil {
+					handler(m)
+				}
+			})
+		})
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 
 	"github.com/bep/debounce"
 	jsoniter "github.com/json-iterator/go"
-	tb "gopkg.in/tucnak/telebot.v2"
+	tb "gopkg.in/telebot.v3"
 )
 
 type GroupSignType = int
@@ -20,43 +20,59 @@ const (
 	GST_POLICY_CALLBACK_SIGN
 )
 
+type CreditMapping struct {
+	PerValidTextMessage    int64
+	PerValidStickerMessage int64
+
+	Command    int64
+	Duplicated int64
+	Warn       int64
+	Ban        int64
+	BanBouns   int64
+
+	HourlyUpperBound int64
+}
+
 type GroupConfig struct {
-	ID            int64
-	Admins        []int64
-	BannedForward []int64
+	ID            int64   `fw:"readonly"`
+	Admins        []int64 `fw:"-"`
+	BannedForward []int64 `fw:"-"`
 	MergeTo       int64
 
 	Locale           string
-	MustFollow       string
-	MustFollowOnJoin bool
-	MustFollowOnMsg  bool
+	MustFollow       string `fw:"readonly"`
+	MustFollowOnJoin bool   `fw:"readonly"`
+	MustFollowOnMsg  bool   `fw:"readonly"`
+	CreditMapping    *CreditMapping
 
+	UnderAttackMode                    bool
 	AntiSpoiler                        bool
 	DisableWarn                        bool
 	RedPacketCaptcha                   bool
 	RedPacketCaptchaFailCreditBehavior int64
 
-	WarnKeywords []string
-	BanKeywords  []string
+	WarnKeywords []string `fw:"-"`
+	BanKeywords  []string `fw:"-"`
 
-	NameBlackListReg   []string
-	NameBlackListRegEx []*regexp.Regexp `json:"-"`
+	NameBlackListReg   []string         `fw:"-"`
+	NameBlackListRegEx []*regexp.Regexp `json:"-" fw:"-"`
 
-	CustomReply []*CustomReplyRule
+	CustomReply []*CustomReplyRule `fw:"-"`
 
-	updateLock    sync.RWMutex `json:"-"`
-	saveLock      sync.Mutex   `json:"-"`
-	saveDebouncer func(func()) `json:"-"`
+	updateLock    sync.RWMutex `json:"-" fw:"-"`
+	saveLock      sync.Mutex   `json:"-" fw:"-"`
+	saveDebouncer func(func()) `json:"-" fw:"-"`
 }
 
 type CustomReplyRule struct {
 	Match   string
 	MatchEx *regexp.Regexp `json:"-"`
 
-	Name           string
-	Limit          int
-	CreditBehavior int
-	CallbackURL    string // need a X-MiaoKeeper-Sign header
+	Name                       string
+	Limit                      int
+	CreditBehavior             int
+	NoForceCreditBehaviorError string
+	CallbackURL                string // need a X-MiaoKeeper-Sign header
 
 	ReplyMessage string
 	ReplyTo      string // message, group, private
@@ -78,6 +94,15 @@ func (crr *CustomReplyRule) Consume() bool {
 	} else {
 		crr.Limit -= 1
 		return true
+	}
+}
+
+func (crr *CustomReplyRule) Resume() {
+	crr.lock.Lock()
+	defer crr.lock.Unlock()
+
+	if crr.Limit >= 0 {
+		crr.Limit += 1
 	}
 }
 
@@ -165,6 +190,24 @@ func (gc *GroupConfig) Check() *GroupConfig {
 			crr.ReplyButtons = make([]string, 0)
 		}
 	}
+
+	if gc.CreditMapping == nil {
+		gc.CreditMapping = NewDefaultCreditMapping()
+	} else {
+		// should <= 0
+		gc.CreditMapping.Command = MinInt64(gc.CreditMapping.Command, 0)
+		gc.CreditMapping.Duplicated = MinInt64(gc.CreditMapping.Duplicated, 0)
+		gc.CreditMapping.Warn = MinInt64(gc.CreditMapping.Warn, 0)
+		gc.CreditMapping.Ban = MinInt64(gc.CreditMapping.Ban, 0)
+
+		// should >= 0
+		gc.CreditMapping.PerValidTextMessage = MaxInt64(gc.CreditMapping.PerValidTextMessage, 0)
+		gc.CreditMapping.PerValidStickerMessage = MaxInt64(gc.CreditMapping.PerValidStickerMessage, 0)
+		gc.CreditMapping.BanBouns = MaxInt64(gc.CreditMapping.BanBouns, 0)
+
+		gc.CreditMapping.HourlyUpperBound = MaxInt64(gc.CreditMapping.HourlyUpperBound, 1)
+	}
+
 	return gc
 }
 
@@ -324,6 +367,18 @@ func (gc *GroupConfig) TestCustomReplyRule(m *tb.Message) *CustomReplyRule {
 func (gc *GroupConfig) ExecPolicy(m *tb.Message) bool {
 	if rule := gc.TestCustomReplyRule(m); rule != nil {
 		if rule.CreditBehavior != 0 {
+			if rule.NoForceCreditBehaviorError != "" && rule.CreditBehavior < 0 {
+				ci := GetCredit(gc.ID, m.Sender.ID)
+				if ci == nil || ci.Credit+int64(rule.CreditBehavior) < 0 {
+					// cannot substract credit points
+					textMessage := BuilRuleMessage(rule.NoForceCreditBehaviorError, m)
+					SmartSendDelete(m, textMessage, WithMarkdown())
+					rule.Resume()
+					gc.Save()
+
+					return true
+				}
+			}
 			addCreditToMsgSender(m.Chat.ID, m, int64(rule.CreditBehavior), true, OPByPolicy)
 		}
 
@@ -360,8 +415,12 @@ func (gc *GroupConfig) ExecPolicy(m *tb.Message) bool {
 		}
 
 		if rule.CallbackURL != "" {
-			if u, err := url.Parse(rule.CallbackURL); err == nil && u != nil {
-				go gc.POSTWithSign(rule.CallbackURL, []byte(rule.ToJson(false)), time.Second*3)
+			realURL := BuilRuleMessage(rule.CallbackURL, m)
+			if strings.HasPrefix(realURL, "tg://") {
+				realURL = strings.Replace(realURL, "tg://", "https://api.telegram.org/bot"+Bot.Token+"/", 1)
+			}
+			if u, err := url.Parse(realURL); err == nil && u != nil {
+				go gc.POSTWithSign(realURL, []byte(rule.ToJson(false)), time.Second*3)
 			}
 		}
 
@@ -369,4 +428,19 @@ func (gc *GroupConfig) ExecPolicy(m *tb.Message) bool {
 	}
 
 	return false
+}
+
+func NewDefaultCreditMapping() *CreditMapping {
+	return &CreditMapping{
+		PerValidTextMessage:    1,
+		PerValidStickerMessage: 1,
+
+		Command:    -5,
+		Duplicated: -5,
+		Warn:       -25,
+		Ban:        -50,
+		BanBouns:   15,
+
+		HourlyUpperBound: 20,
+	}
 }

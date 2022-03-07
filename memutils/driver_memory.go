@@ -64,18 +64,22 @@ func (md *MemDriverMemory) Write(key string, value interface{}, expire time.Dura
 	return md.unsafeWrite(key, value, expire, overwriteTTLIfExists)
 }
 
-func (md *MemDriverMemory) Inc(key string, expire time.Duration, overwriteTTLIfExists bool) int {
+func (md *MemDriverMemory) IncBy(key string, value int, expire time.Duration, overwriteTTLIfExists bool) int {
 	md.lock.Lock()
 	defer md.lock.Unlock()
 
 	val, ok := md.unsafeRead(key)
-	nextVal := 1
+	nextVal := value
 	if ok && val != nil && reflect.TypeOf(val).Kind() == reflect.Int {
-		nextVal = val.(int) + 1
+		nextVal = val.(int) + value
 	}
 
 	md.unsafeWrite(key, nextVal, expire, overwriteTTLIfExists)
 	return nextVal
+}
+
+func (md *MemDriverMemory) Inc(key string, expire time.Duration, overwriteTTLIfExists bool) int {
+	return md.IncBy(key, 1, expire, overwriteTTLIfExists)
 }
 
 func (md *MemDriverMemory) Exists(key string) bool {
@@ -117,4 +121,11 @@ func (md *MemDriverMemory) List(key string) []string {
 		}
 	}
 	return slice
+}
+
+func (md *MemDriverMemory) Wipe(prefix string) {
+	md.lock.Lock()
+	defer md.lock.Unlock()
+
+	md.Init()
 }

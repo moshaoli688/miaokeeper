@@ -1,24 +1,29 @@
 package main
 
 import (
-	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"math/rand"
-	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/BBAlliance/miaokeeper/memutils"
-	_ "github.com/go-sql-driver/mysql"
+
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"gorm.io/gorm/logger"
+
 	jsoniter "github.com/json-iterator/go"
-	tb "gopkg.in/tucnak/telebot.v2"
+	tb "gopkg.in/telebot.v3"
 )
 
 var DBCONN = ""
-var MYSQLDB *sql.DB
+var DBPREFIX = "MiaoKeeper"
+var DB *gorm.DB
 var UpdateLock sync.Mutex
 var GroupConfigLock sync.Mutex
 var LotteryConfigLock sync.Mutex
@@ -68,100 +73,102 @@ func OPParse(s string) OPReasons {
 	return OPAll
 }
 
-type CreditInfo struct {
-	Username string `json:"username"`
-	Name     string `json:"nickname"`
-	ID       int64  `json:"id"`
-	Credit   int64  `json:"credit"`
-	GroupId  int64  `json:"groupId"`
+func DBTName(tableName string, extras ...int64) string {
+	table := DBPREFIX + "_" + tableName
+	if len(extras) > 0 {
+		table += "_" + fmt.Sprintf("%d", Abs(extras[0]))
+	}
+	return table
 }
 
+func GetRandClause() string {
+	if strings.HasPrefix(DBCONN, "postgres") {
+		return "RANDOM()"
+	}
+	return "RAND()"
+}
+
+// GORM:%NAME%_Credit_%GROUP%
+type CreditInfo struct {
+	ID       int64  `json:"id" gorm:"column:userid;primaryKey;not null"`
+	Username string `json:"username" gorm:"column:username;type:text;not null"`
+	Name     string `json:"nickname" gorm:"column:name;type:text;not null"`
+	Credit   int64  `json:"credit" gorm:"column:credit;not null"`
+	GroupId  int64  `json:"groupId" gorm:"-"`
+}
+
+// GORM:%NAME%_Credit_Log_%GROUP%
 type CreditLog struct {
-	ID        int64
-	UserID    int64
-	Credit    int64
-	Reason    OPReasons
-	CreatedAt time.Time
+	ID        int64     `gorm:"column:id;primaryKey;autoIncrement;not null"`
+	UserID    int64     `gorm:"column:userid;not null;index"`
+	Credit    int64     `gorm:"column:credit;not null"`
+	Reason    OPReasons `gorm:"column:op;type:string;size:16;not null;index"`
+	CreatedAt time.Time `gorm:"column:createdat;autoCreateTime"`
+}
+
+// GORM:%NAME%_Config
+type DBGlobalConfig struct {
+	K string `gorm:"column:k;type:string;primaryKey;size:128;not null"`
+	V string `gorm:"column:v;type:text;not null"`
+}
+
+// GORM:%NAME%_Lottery
+type DBLottery struct {
+	ID        string    `gorm:"column:id;type:string;size:128;primaryKey;not null"`
+	Config    string    `gorm:"column:config;type:text;not null"`
+	CreatedAt time.Time `gorm:"column:createdat;autoCreateTime"`
+}
+
+// GORM:%NAME%_Lottery_Participation
+type DBLotteryParticipation struct {
+	LotteryID   string    `gorm:"column:lotteryid;type:string;size:128;uniqueIndex:uniq_participant;index:lottery_id;not null"`
+	Participant int64     `gorm:"column:participant;uniqueIndex:uniq_participant;not null"`
+	Username    string    `gorm:"column:username;type:text;not null"`
+	CreatedAt   time.Time `gorm:"column:createdat;autoCreateTime"`
 }
 
 var GroupConfigCache map[int64]*GroupConfig
 var LotteryConfigCache map[string]*LotteryInstance
 
 func InitDatabase() (err error) {
-	MYSQLDB, err = sql.Open("mysql", DBCONN+"?parseTime=true")
-	if err == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		err = MYSQLDB.PingContext(ctx)
-		cancel()
+	var conn gorm.Dialector
+	if strings.HasPrefix(DBCONN, "postgres") {
+		// postgresSQL
+		conn = postgres.Open(DBCONN)
+	} else {
+		// mysql
+		connStr := DBCONN
+		if strings.Contains(connStr, "?") {
+			connStr += "&parseTime=true"
+		} else {
+			connStr += "?parseTime=true"
+		}
+		conn = mysql.Open(connStr)
 	}
 
+	DB, err = gorm.Open(conn, &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	return
 }
 
-func InitTables() {
-	q, err := MYSQLDB.Query(`CREATE TABLE IF NOT EXISTS MiaoKeeper_Config (
-		k VARCHAR(128) NOT NULL PRIMARY KEY,
-		v TEXT NOT NULL
-	) DEFAULT CHARSET=utf8mb4`)
-	if err != nil {
-		DErrorf("Config Table Creation Error | error=%v", err.Error())
-		os.Exit(1)
-	}
-	if q != nil {
-		q.Close()
-	}
-
-	q, err = MYSQLDB.Query(`CREATE TABLE IF NOT EXISTS MiaoKeeper_Lottery (
-		id VARCHAR(128) NOT NULL PRIMARY KEY,
-		config TEXT NOT NULL,
-		createdat DATETIME DEFAULT CURRENT_TIMESTAMP
-	) DEFAULT CHARSET=utf8mb4`)
-	if err != nil {
-		DErrorf("Lottery Table Creation Error | error=%v", err.Error())
-		os.Exit(1)
-	}
-	if q != nil {
-		q.Close()
-	}
-
-	q, err = MYSQLDB.Query(`CREATE TABLE IF NOT EXISTS MiaoKeeper_Lottery_Participation (
-		id VARCHAR(128) NOT NULL,
-		participant BIGINT NOT NULL,
-		username TEXT NOT NULL,
-		createdat DATETIME DEFAULT CURRENT_TIMESTAMP,
-		INDEX (id),
-		UNIQUE KEY uniq_participant (id, participant)
-	) DEFAULT CHARSET=utf8mb4`)
-	if err != nil {
-		DErrorf("Lottery Participation Table Creation Error | error=%v", err.Error())
-		os.Exit(1)
-	}
-	if q != nil {
-		q.Close()
-	}
-}
-
 func ReadConfig(key string) string {
-	ret := ""
-	err := MYSQLDB.QueryRow(`SELECT v FROM MiaoKeeper_Config WHERE k = ?;`, key).Scan(&ret)
+	dbgc := DBGlobalConfig{}
+	err := DB.Table(DBTName("Config")).First(&dbgc, "k = ?", key).Error
 	if err != nil {
 		DLogf("Config Read Error | key=%s error=%v", key, err.Error())
 	}
-	return ret
+	return dbgc.V
 }
 
 func WriteConfig(key, value string) {
-	q, err := MYSQLDB.Query(`INSERT INTO MiaoKeeper_Config
-			(k, v)
-		VALUES
-			(?, ?)
-		ON DUPLICATE KEY UPDATE
-			v = VALUES(v)`, key, value)
+	dbgc := DBGlobalConfig{key, value}
+	err := DB.Table(DBTName("Config")).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "k"}},
+		DoUpdates: clause.AssignmentColumns([]string{"v"}),
+	}).Create(&dbgc).Error
 	if err != nil {
 		DLogf("Config Write Error | key=%s value=%s error=%v", key, value, err.Error())
-	}
-	if q != nil {
-		q.Close()
 	}
 }
 
@@ -218,35 +225,8 @@ func SetGroupConfig(groupId int64, gc *GroupConfig) *GroupConfig {
 }
 
 func InitGroupTable(groupId int64) {
-	q, err := MYSQLDB.Query(fmt.Sprintf(`CREATE TABLE IF NOT EXISTS MiaoKeeper_Credit_%d (
-		userid BIGINT NOT NULL PRIMARY KEY,
-		name TEXT NOT NULL,
-		username TEXT NOT NULL,
-		credit BIGINT NOT NULL
-	) DEFAULT CHARSET=utf8mb4`, Abs(groupId)))
-	if err != nil {
-		DErrorf("Table Creation Error | error=%v", err.Error())
-	}
-	if q != nil {
-		q.Close()
-	}
-
-	q, err = MYSQLDB.Query(fmt.Sprintf(`CREATE TABLE IF NOT EXISTS MiaoKeeper_Credit_Log_%d (
-		id BIGINT NOT NULL AUTO_INCREMENT,
-		userid BIGINT NOT NULL,
-		credit BIGINT NOT NULL,
-		op CHAR(16) NOT NULL,
-		createdat DATETIME DEFAULT CURRENT_TIMESTAMP,
-		INDEX (id),
-		INDEX (userid),
-		INDEX (op)
-	) DEFAULT CHARSET=utf8mb4`, Abs(groupId)))
-	if err != nil {
-		DErrorf("Table Creation Error | error=%v", err.Error())
-	}
-	if q != nil {
-		q.Close()
-	}
+	PlainError("Unable to create table", DB.Table(DBTName("Credit", groupId)).AutoMigrate(&CreditInfo{}))
+	PlainError("Unable to create table", DB.Table(DBTName("Credit_Log", groupId)).AutoMigrate(&CreditLog{}))
 
 	if GetGroupConfig(groupId) == nil {
 		NewGroupConfig(groupId)
@@ -254,8 +234,13 @@ func InitGroupTable(groupId int64) {
 }
 
 func ReadConfigs() {
+	PlainError("Unable to create config table", DB.Table(DBTName("Config")).AutoMigrate(&DBGlobalConfig{}))
+	PlainError("Unable to create lottery table", DB.Table(DBTName("Lottery")).AutoMigrate(&DBLottery{}))
+	PlainError("Unable to create table", DB.Table(DBTName("Lottery_Participation")).AutoMigrate(&DBLotteryParticipation{}))
+
 	ADMINS = ParseStrToInt64Arr(ReadConfig("ADMINS"))
 	GROUPS = ParseStrToInt64Arr(ReadConfig("GROUPS"))
+
 	for _, g := range GROUPS {
 		InitGroupTable(g)
 	}
@@ -308,9 +293,7 @@ func UpdateGroup(groupId int64, method UpdateMethod) bool {
 func GetCredit(groupId, userId int64) *CreditInfo {
 	ret := &CreditInfo{}
 	realGroup := GetAliasedGroup(groupId)
-	err := MYSQLDB.QueryRow(fmt.Sprintf(`SELECT userid, name, username, credit FROM MiaoKeeper_Credit_%d WHERE userid = ?;`, Abs(realGroup)), userId).Scan(
-		&ret.ID, &ret.Name, &ret.Username, &ret.Credit,
-	)
+	err := DB.Table(DBTName("Credit", realGroup)).First(&ret, "userid = ?", userId).Error
 	if err != nil {
 		DLogf("Database Credit Read Error | gid=%d rgid=%d uid=%d error=%s", groupId, realGroup, userId, err.Error())
 	}
@@ -323,31 +306,27 @@ func GetCredit(groupId, userId int64) *CreditInfo {
 func GetCreditRank(groupId int64, limit int) []*CreditInfo {
 	returns := []*CreditInfo{}
 	realGroup := GetAliasedGroup(groupId)
-	row, _ := MYSQLDB.Query(fmt.Sprintf(`SELECT userid, name, username, credit FROM MiaoKeeper_Credit_%d ORDER BY credit DESC LIMIT ?;`, Abs(realGroup)), limit)
-	for row.Next() {
-		ret := &CreditInfo{}
-		row.Scan(&ret.ID, &ret.Name, &ret.Username, &ret.Credit)
-		if ret.ID > 0 {
-			ret.GroupId = groupId
+	DB.Table(DBTName("Credit", realGroup)).Order("credit DESC").Limit(limit).Find(&returns)
+	for _, ci := range returns {
+		if ci != nil && ci.ID > 0 {
+			ci.GroupId = groupId
 		}
-		returns = append(returns, ret)
 	}
-	row.Close()
 	return returns
 }
 
 // does not apply MergeTo
 func DumpCredits(groupId int64) [][]string {
 	ret := [][]string{}
-	id, name, username, credit := int64(0), "", "", int64(0)
-	row, _ := MYSQLDB.Query(fmt.Sprintf(`SELECT userid, name, username, credit FROM MiaoKeeper_Credit_%d WHERE credit > 0 ORDER BY credit;`, Abs(groupId)))
-	for row.Next() {
-		row.Scan(&id, &name, &username, &credit)
-		if id > 0 && credit > 0 {
-			ret = append(ret, []string{strconv.FormatInt(id, 10), name, username, strconv.FormatInt(credit, 10)})
+	batches := []CreditInfo{}
+	DB.Table(DBTName("Credit", groupId)).FindInBatches(&batches, 100, func(tx *gorm.DB, batchNum int) error {
+		for _, batch := range batches {
+			if batch.ID > 0 && batch.Credit > 0 {
+				ret = append(ret, []string{strconv.FormatInt(batch.ID, 10), batch.Name, batch.Username, strconv.FormatInt(batch.Credit, 10)})
+			}
 		}
-	}
-	row.Close()
+		return nil
+	})
 
 	DInfof("Credit Dump | group=%d columns=%d", groupId, len(ret))
 	return ret
@@ -359,44 +338,35 @@ func FlushCredits(groupId int64, records [][]string) {
 		return
 	}
 
-	params := []interface{}{}
-	sqlCmd := fmt.Sprintf(`INSERT INTO MiaoKeeper_Credit_%d (userid, name, username, credit) VALUES`, Abs(groupId))
+	batches := []CreditInfo{}
+	logbatches := []CreditLog{}
 	for _, r := range records {
-		sqlCmd += ` (?, ?, ?, ?),`
-		for _, rc := range r {
-			params = append(params, rc)
+		if len(r) >= 4 {
+			batches = append(batches, CreditInfo{
+				ID:       ParseInt64(r[0]),
+				Name:     r[1],
+				Username: r[2],
+				Credit:   ParseInt64(r[3]),
+			})
+			logbatches = append(logbatches, CreditLog{
+				UserID: ParseInt64(r[0]),
+				Credit: ParseInt64(r[3]),
+				Reason: OPFlush,
+			})
 		}
 	}
-	sqlCmd = sqlCmd[0 : len(sqlCmd)-1]
-	sqlCmd += ` ON DUPLICATE KEY UPDATE
-		name = VALUES(name),
-		username = VALUES(username),
-		credit = VALUES(credit) + credit`
-
-	query, err := MYSQLDB.Query(sqlCmd, params...)
+	err := DB.Table(DBTName("Credit", groupId)).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "userid"}},
+		DoUpdates: clause.AssignmentColumns([]string{"name", "username", "credit"}),
+	}).CreateInBatches(&batches, 100).Error
 	if err != nil {
 		DErrorE(err, "Database Credit Flush Error")
 	}
-	if query != nil {
-		query.Close()
-	}
 
 	// writing logs
-	params = []interface{}{}
-	sqlCmd = fmt.Sprintf(`INSERT INTO MiaoKeeper_Credit_Log_%d (userid, credit, op) VALUES`, Abs(groupId))
-	for _, r := range records {
-		sqlCmd += ` (?, ?, ?),`
-		if len(r) >= 4 {
-			params = append(params, r[0], r[3], OPFlush)
-		}
-	}
-	sqlCmd = sqlCmd[0 : len(sqlCmd)-1]
-	query, err = MYSQLDB.Query(sqlCmd, params...)
+	err = DB.Table(DBTName("Credit_Log", groupId)).CreateInBatches(&logbatches, 100).Error
 	if err != nil {
 		DErrorE(err, "Database Credit Log Flush Error")
-	}
-	if query != nil {
-		query.Close()
 	}
 
 	DInfof("Flush Credit | group=%d columns=%d", groupId, len(records))
@@ -405,34 +375,16 @@ func FlushCredits(groupId int64, records [][]string) {
 func QueryLogs(groupId int64, offset uint64, limit uint64, uid int64, before time.Time, vtype OPReasons) []CreditLog {
 	var ret = []CreditLog{}
 
-	id, userId, credit, reason := int64(0), int64(0), int64(0), OPAll
-	args := []interface{}{before}
-	addons := ""
+	tx := DB.Table(DBTName("Credit_Log", groupId)).Order("id DESC").Limit(int(limit)).Offset(int(offset))
 	if uid > 0 {
-		addons += " AND userid = ?"
-		args = append(args, uid)
+		tx.Where("userid = ?", uid)
 	}
 	if vtype != "" {
-		addons += " AND op = ?"
-		args = append(args, vtype)
+		tx.Where("op = ?", string(vtype))
 	}
-	args = append(args, limit, offset)
+	tx.Find(&ret)
 
-	queryStr := fmt.Sprintf(`SELECT id, userid, credit, op, createdat FROM MiaoKeeper_Credit_Log_%d
-		WHERE createdat < ? %s
-		ORDER BY id DESC LIMIT ? OFFSET ?;`, Abs(groupId), addons)
-	row, _ := MYSQLDB.Query(queryStr, args...)
-
-	for row.Next() {
-		myTime := time.Now()
-		row.Scan(&id, &userId, &credit, &reason, &myTime)
-		if id > 0 {
-			ret = append(ret, CreditLog{id, userId, credit, reason, myTime})
-		}
-	}
-	row.Close()
-
-	DInfof("Query Logs | group=%d offset=%d limit=%d userId=%d before=%d reason=%s columns=%d", groupId, offset, limit, userId, before.Unix(), vtype, len(ret))
+	DInfof("Query Logs | group=%d offset=%d limit=%d userId=%d before=%d reason=%s columns=%d", groupId, offset, limit, uid, before.Unix(), vtype, len(ret))
 	return ret
 }
 
@@ -453,42 +405,32 @@ func UpdateCredit(user *CreditInfo, method UpdateMethod, value int64, reason OPR
 		user.Credit = 0
 	}
 
-	var query *sql.Rows
-	var queryLogs *sql.Rows
 	var err error
-
 	realGroup := GetAliasedGroup(user.GroupId)
 	if method != UMDel {
-		query, err = MYSQLDB.Query(fmt.Sprintf(`INSERT INTO MiaoKeeper_Credit_%d
-				(userid, name, username, credit)
-			VALUES
-				(?, ?, ?, ?)
-			ON DUPLICATE KEY UPDATE
-				name = VALUES(name),
-				username = VALUES(username),
-				credit = VALUES(credit)
-			`, Abs(realGroup)), user.ID, user.Name, user.Username, user.Credit)
-		queryLogs, _ = MYSQLDB.Query(fmt.Sprintf(`INSERT INTO MiaoKeeper_Credit_Log_%d
-			(userid, credit, op) VALUES (?, ?, ?);`, Abs(user.GroupId)), user.ID, value, reason)
+		err = DB.Table(DBTName("Credit", realGroup)).Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "userid"}},
+			DoUpdates: clause.AssignmentColumns([]string{"name", "username", "credit"}),
+		}).Create(&user).Error
+		DB.Table(DBTName("Credit_Log", realGroup)).Create(&CreditLog{
+			UserID: user.ID,
+			Credit: value,
+			Reason: reason,
+		})
 	} else if realGroup == user.GroupId {
 		// when the method is UMDel, do not delete aliased credit
-		query, err = MYSQLDB.Query(fmt.Sprintf(`DELETE FROM MiaoKeeper_Credit_%d
-			WHERE userid = ?;`, Abs(user.GroupId)), user.ID)
-		queryLogs, _ = MYSQLDB.Query(fmt.Sprintf(`INSERT INTO MiaoKeeper_Credit_Log_%d
-			(userid, credit, op) VALUES (?, ?, ?);`, Abs(user.GroupId)), user.ID, -user.Credit, OPByCleanUp)
+		err = DB.Table(DBTName("Credit", realGroup)).Delete(&user).Error
+		DB.Table(DBTName("Credit_Log", realGroup)).Create(&CreditLog{
+			UserID: user.ID,
+			Credit: -ci.Credit,
+			Reason: reason,
+		})
 	}
 	if err != nil {
 		DErrorE(err, "Database Credit Update Error")
 	}
-	if query != nil {
-		query.Close()
-	}
-	if queryLogs != nil {
-		queryLogs.Close()
-	}
 
 	DLogf("Update Credit | gid=%d rgid=%d user=%d alter=%d credit=%d", user.GroupId, realGroup, user.ID, method, value)
-
 	return user
 }
 
@@ -508,8 +450,7 @@ type LotteryInstance struct {
 	Duration    time.Duration
 	Participant int
 
-	Winners          []int64
-	WinnersName      []string
+	Winners          []DBLotteryParticipation
 	ParticipantCache int        `json:"-"`
 	JoinLock         sync.Mutex `json:"-"`
 }
@@ -580,10 +521,10 @@ func (li *LotteryInstance) GenText() string {
 	if li.Status >= 0 {
 		status += fmt.Sprintf("\n*参与人数:* %d", li.Participants())
 	}
-	if len(li.Winners) > 0 && len(li.Winners) <= len(li.WinnersName) {
+	if len(li.Winners) > 0 && len(li.Winners) <= len(li.Winners) {
 		status += "\n\n*🏆 获奖者:*"
 		for i := range li.Winners {
-			status += fmt.Sprintf("\n`%2d.` `%s` ([%d](%s))", i+1, GetQuotableStr(li.WinnersName[i]), li.Winners[i], fmt.Sprintf("tg://user?id=%d", li.Winners[i]))
+			status += fmt.Sprintf("\n`%2d.` `%s` ([%d](%s))", i+1, GetQuotableStr(li.Winners[i].Username), li.Winners[i].Participant, fmt.Sprintf("tg://user?id=%d", li.Winners[i].Participant))
 		}
 	}
 
@@ -595,17 +536,14 @@ func (li *LotteryInstance) GenText() string {
 
 func (li *LotteryInstance) Update() bool {
 	cfg, _ := jsoniter.Marshal(li)
-	q, err := MYSQLDB.Query(`INSERT INTO MiaoKeeper_Lottery
-		(id, config)
-	VALUES
-		(?, ?)
-	ON DUPLICATE KEY UPDATE
-		config = VALUES(config)
-	`, li.ID, string(cfg))
+	err := DB.Table(DBTName("Lottery")).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"config"}),
+	}).Create(&DBLottery{
+		ID:     li.ID,
+		Config: string(cfg),
+	}).Error
 
-	if q != nil {
-		q.Close()
-	}
 	if err != nil {
 		DErrorf("Update Lottery Error | id=%s value=%s error=%v", li.ID, string(cfg), err.Error())
 		return false
@@ -622,13 +560,12 @@ func (li *LotteryInstance) Join(userId int64, username string) error {
 		return errors.New("❌ 抽奖活动不在有效时间范围内，请检查后再试 ~")
 	}
 
-	q, err := MYSQLDB.Query(`INSERT INTO MiaoKeeper_Lottery_Participation
-			(id, participant, username)
-		VALUES
-			(?, ?, ?)`, li.ID, userId, username)
-	if q != nil {
-		q.Close()
-	}
+	err := DB.Table(DBTName("Lottery_Participation")).Create(&DBLotteryParticipation{
+		LotteryID:   li.ID,
+		Participant: userId,
+		Username:    username,
+	}).Error
+
 	if err != nil {
 		DLogf("Join Lottery Error | id=%s user=%d error=%v", li.ID, userId, err.Error())
 		return errors.New("❌ 您已经参加过这个活动了，请不要重复参加哦 ~")
@@ -647,15 +584,15 @@ func (li *LotteryInstance) Participants() int {
 			return li.ParticipantCache
 		}
 
-		ret := 0
-		err := MYSQLDB.QueryRow(`SELECT count(*) FROM MiaoKeeper_Lottery_Participation WHERE id = ?;`, li.ID).Scan(&ret)
+		ret := int64(0)
+		err := DB.Table(DBTName("Lottery_Participation")).Where("lotteryid = ?", li.ID).Count(&ret).Error
 		if err != nil {
 			DLogf("Fetch Lottery Participants Number Error | id=%s error=%v", li.ID, err.Error())
 			return -1
 		}
 
-		li.ParticipantCache = ret
-		return ret
+		li.ParticipantCache = int(ret)
+		return li.ParticipantCache
 	}
 	return -1
 }
@@ -696,21 +633,13 @@ func (li *LotteryInstance) CheckDraw(force bool) bool {
 
 		// draw
 		if li.Status == 2 {
-			li.Winners = []int64{}
-			li.WinnersName = []string{}
-			row, _ := MYSQLDB.Query(`SELECT participant, username FROM MiaoKeeper_Lottery_Participation WHERE id = ? ORDER BY RAND() LIMIT ?;`, li.ID, li.Num)
-			for row.Next() {
-				userid, username := int64(0), ""
-				row.Scan(&userid, &username)
-				if userid > 0 {
-					li.Winners = append(li.Winners, userid)
-					li.WinnersName = append(li.WinnersName, username)
-				}
-			}
+			winners := []DBLotteryParticipation{}
+			DB.Table(DBTName("Lottery_Participation")).Clauses(clause.OrderBy{
+				Expression: clause.Expr{SQL: GetRandClause()},
+			}).Where("lotteryid = ?", li.ID).Limit(li.Num).Find(&winners)
 
-			row.Close()
+			li.Winners = winners
 			li.Update()
-
 			li.UpdateTelegramMsg()
 			return true
 		}
@@ -726,15 +655,15 @@ func GetLottery(lotteryId string) *LotteryInstance {
 		return li
 	}
 
-	ret := ""
-	err := MYSQLDB.QueryRow(`SELECT config FROM MiaoKeeper_Lottery WHERE id = ?;`, lotteryId).Scan(&ret)
+	ret := DBLottery{}
+	err := DB.Table(DBTName("Lottery")).First(&ret, "id = ?", lotteryId).Error
 	if err != nil {
 		DErrorf("Fetch Lottery Error | id=%s error=%v", lotteryId, err.Error())
 		return nil
 	}
 
 	li := LotteryInstance{}
-	err = jsoniter.Unmarshal([]byte(ret), &li)
+	err = jsoniter.Unmarshal([]byte(ret.Config), &li)
 	if err != nil {
 		DErrorf("Unmarshal Lottery Error | id=%s error=%v", lotteryId, err.Error())
 		return nil

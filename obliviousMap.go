@@ -31,8 +31,16 @@ func (om *ObliviousMapIfce) Exist(key string) bool {
 	return om.driver.Exists(om.prefix + key)
 }
 
+func (om *ObliviousMapIfce) Wipe() {
+	om.driver.Wipe(om.prefix)
+}
+
 type ObliviousMapInt struct {
 	*ObliviousMapIfce
+}
+
+func (om *ObliviousMapInt) AddBy(key string, val int) int {
+	return om.driver.IncBy(om.prefix+key, val, om.expire, om.utif)
 }
 
 func (om *ObliviousMapInt) Add(key string) int {

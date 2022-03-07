@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/BBAlliance/miaokeeper/memutils"
-	tb "gopkg.in/tucnak/telebot.v2"
+	tb "gopkg.in/telebot.v3"
 )
 
 type DeleteMessageArgs struct {
@@ -58,11 +58,21 @@ func InitScheduler() {
 				},
 			}
 			Bot.Delete(fakeMsg)
+			underAttackMode := false
+			if gc := GetGroupConfig(args.ChatId); gc != nil {
+				underAttackMode = gc.UnderAttackMode
+			}
 			if joinmap.Exist(args.VerificationId) {
 				cm, err := Bot.ChatMemberOf(fakeMsg.Chat, fakeMsg.Sender)
 				if err != nil || cm.Role == tb.Restricted || cm.Role == tb.Kicked || cm.Role == tb.Left {
-					KickOnce(fakeMsg.Chat.ID, fakeMsg.Sender.ID)
-					SmartSend(fakeMsg.Chat, fmt.Sprintf(Locale("channel.kicked", GetSenderLocale(fakeMsg)), fakeMsg.Sender.ID), WithMarkdown())
+					textMsg := fmt.Sprintf(Locale("channel.kicked", GetSenderLocale(fakeMsg)), fakeMsg.Sender.ID)
+					if underAttackMode {
+						Kick(fakeMsg.Chat.ID, fakeMsg.Sender.ID)
+						SmartSendDelete(fakeMsg.Chat, textMsg, WithMarkdown())
+					} else {
+						KickOnce(fakeMsg.Chat.ID, fakeMsg.Sender.ID)
+						SmartSend(fakeMsg.Chat, textMsg, WithMarkdown())
+					}
 				}
 			}
 		}

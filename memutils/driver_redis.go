@@ -50,16 +50,20 @@ func (md *MemDriverRedis) Write(key string, value interface{}, expire time.Durat
 	return value
 }
 
-func (md *MemDriverRedis) Inc(key string, expire time.Duration, overwriteTTLIfExists bool) int {
+func (md *MemDriverRedis) IncBy(key string, value int, expire time.Duration, overwriteTTLIfExists bool) int {
 	if !overwriteTTLIfExists {
 		if duration, err := md.rdb.TTL(md.ctx, key).Result(); err == nil && duration > time.Second {
 			expire = duration
 		}
 	}
-	ret := md.rdb.Incr(md.ctx, key).Val()
+	ret := md.rdb.IncrBy(md.ctx, key, int64(value)).Val()
 	md.rdb.Expire(md.ctx, key, expire)
 
 	return int(ret)
+}
+
+func (md *MemDriverRedis) Inc(key string, expire time.Duration, overwriteTTLIfExists bool) int {
+	return md.IncBy(key, 1, expire, overwriteTTLIfExists)
 }
 
 func (md *MemDriverRedis) Expire(key string) {
@@ -72,4 +76,25 @@ func (md *MemDriverRedis) Exists(key string) bool {
 
 func (md *MemDriverRedis) List(prefix string) []string {
 	return md.rdb.Keys(md.ctx, prefix+"*").Val()
+}
+
+func (md *MemDriverRedis) Wipe(prefix string) {
+	iter := md.rdb.Scan(md.ctx, 0, prefix+"*", 0).Iterator()
+	idGroups := []string{}
+
+	for iter.Next(md.ctx) {
+		idGroups = append(idGroups, iter.Val())
+		if len(idGroups) > 25 {
+			md.rdb.Del(md.ctx, idGroups...).Err()
+			idGroups = []string{}
+		}
+	}
+
+	if len(idGroups) > 0 {
+		md.rdb.Del(md.ctx, idGroups...).Err()
+	}
+
+	if err := iter.Err(); err != nil {
+		Log(os.Stdout, "MemDriver Error | Wiping data error err="+err.Error())
+	}
 }

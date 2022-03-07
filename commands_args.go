@@ -12,7 +12,7 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
-	tb "gopkg.in/tucnak/telebot.v2"
+	tb "gopkg.in/telebot.v3"
 )
 
 func CmdSuExportCredit(m *tb.Message) {
@@ -49,7 +49,7 @@ func CmdImportPolicy(m *tb.Message) {
 	gc := GetGroupConfig(chatId)
 	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
 		Bot.Notify(m.Chat, tb.UploadingDocument)
-		ioHandler, err := Bot.GetFile(&m.Document.File)
+		ioHandler, err := Bot.File(&m.Document.File)
 		if err != nil {
 			DErrorEf(err, "Import Credit Error | not downloaded url=%s", Bot.URL+"/file/bot"+Bot.Token+"/"+m.Document.FilePath)
 			SmartSendDelete(m, Locale("policy.importError", GetSenderLocale(m)))
@@ -79,7 +79,7 @@ func CmdSuImportCredit(m *tb.Message) {
 	gc := GetGroupConfig(m.Chat.ID)
 	if gc != nil && IsAdmin(m.Sender.ID) {
 		Bot.Notify(m.Chat, tb.UploadingDocument)
-		ioHandler, err := Bot.GetFile(&m.Document.File)
+		ioHandler, err := Bot.File(&m.Document.File)
 		if err != nil {
 			DErrorEf(err, "Import Credit Error | not downloaded url=%s", Bot.URL+"/file/bot"+Bot.Token+"/"+m.Document.FilePath)
 			SmartSendDelete(m, Locale("credit.importError", GetSenderLocale(m)))
@@ -232,6 +232,40 @@ func CmdAddAdmin(m *tb.Message) {
 			SmartSendDelete(m.ReplyTo, Locale("grant.assign.success", GetSenderLocale(m)))
 		} else {
 			SmartSendDelete(m.ReplyTo, Locale("grant.assign.failure", GetSenderLocale(m)))
+		}
+	} else {
+		SmartSendDelete(m, Locale("cmd.noGroupPerm", GetSenderLocale(m)))
+	}
+}
+
+func CmdSetConfig(m *tb.Message) {
+	defer LazyDelete(m)
+	gc := GetGroupConfig(m.Chat.ID)
+	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+		extra := strings.Fields(m.Payload)
+		if len(extra) != 2 {
+			SmartSendDelete(m, fmt.Sprintf(Locale("system.wrongUsage", GetSenderLocale(m)), "/set <ConfigPath> <Value>"), WithMarkdown())
+		} else if original, err := FieldWriter(gc, extra[0], extra[1], true); err != nil {
+			SmartSendDelete(m, fmt.Sprintf(Locale("system.unexpectedError", GetSenderLocale(m)), err.Error()))
+		} else {
+			SmartSendDelete(m, fmt.Sprintf(Locale("cmd.misc.set.success", GetSenderLocale(m)), original, extra[1]), WithMarkdown())
+		}
+	} else {
+		SmartSendDelete(m, Locale("cmd.noGroupPerm", GetSenderLocale(m)))
+	}
+}
+
+func CmdGetConfig(m *tb.Message) {
+	defer LazyDelete(m)
+	gc := GetGroupConfig(m.Chat.ID)
+	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+		extra := strings.Fields(m.Payload)
+		if len(extra) != 1 {
+			SmartSendDelete(m, fmt.Sprintf(Locale("system.wrongUsage", GetSenderLocale(m)), "/get <ConfigPath>"), WithMarkdown())
+		} else if original, err := FieldWriter(gc, extra[0], "", false); err != nil {
+			SmartSendDelete(m, fmt.Sprintf(Locale("system.unexpectedError", GetSenderLocale(m)), err.Error()))
+		} else {
+			SmartSendDelete(m, fmt.Sprintf(Locale("cmd.misc.get.success", GetSenderLocale(m)), extra[0], original), WithMarkdown())
 		}
 	} else {
 		SmartSendDelete(m, Locale("cmd.noGroupPerm", GetSenderLocale(m)))
@@ -419,7 +453,7 @@ func CmdSetChannel(m *tb.Message) {
 				gc.Save()
 				SmartSendDelete(m, Locale("channel.set.cancel", GetSenderLocale(m)))
 			} else {
-				if UserIsInGroup(groupName, Bot.Me.ID) != UIGIn {
+				if inGroupStatus, _ := UserIsInGroup(groupName, Bot.Me.ID); inGroupStatus != UIGIn {
 					SmartSendDelete(m, Locale("channel.cannotCheckChannel", GetSenderLocale(m)))
 				} else {
 					gc.MustFollow = groupName
@@ -732,20 +766,27 @@ func CmdVersion(m *tb.Message) {
 	SmartSendDelete(m, fmt.Sprintf(Locale("cmd.misc.version", GetSenderLocale(m)), version))
 }
 
-func CmdID(m *tb.Message) {
+func CmdInfo(m *tb.Message) {
 	defer LazyDelete(m)
 	retStr := ""
+	usrStatus, usrGroupStatus := UIGStatus("N/A"), tb.MemberStatus("N/A")
 	if m.ReplyTo != nil {
 		if m.ReplyTo.SenderChat != nil {
 			retStr = fmt.Sprintf(Locale("cmd.misc.replyid.chat", GetSenderLocale(m)), m.Chat.ID, m.ReplyTo.SenderChat.ID, m.ReplyTo.SenderChat.Type)
 		} else {
-			retStr = fmt.Sprintf(Locale("cmd.misc.replyid.user", GetSenderLocale(m)), m.Chat.ID, m.ReplyTo.Sender.ID, m.ReplyTo.Sender.LanguageCode)
+			if gc := GetGroupConfig(m.Chat.ID); gc != nil {
+				usrStatus, usrGroupStatus = UserIsInGroup(gc.MustFollow, m.ReplyTo.Sender.ID)
+			}
+			retStr = fmt.Sprintf(Locale("cmd.misc.replyid.user", GetSenderLocale(m)), m.Chat.ID, m.ReplyTo.Sender.ID, m.ReplyTo.Sender.LanguageCode, usrStatus, usrGroupStatus)
 		}
 	} else {
 		if m.SenderChat != nil {
 			retStr = fmt.Sprintf(Locale("cmd.misc.id.chat", GetSenderLocale(m)), m.Chat.ID, m.SenderChat.ID, m.SenderChat.Type)
 		} else {
-			retStr = fmt.Sprintf(Locale("cmd.misc.id.user", GetSenderLocale(m)), m.Chat.ID, m.Sender.ID, m.Sender.LanguageCode)
+			if gc := GetGroupConfig(m.Chat.ID); gc != nil {
+				usrStatus, usrGroupStatus = UserIsInGroup(gc.MustFollow, m.Sender.ID)
+			}
+			retStr = fmt.Sprintf(Locale("cmd.misc.id.user", GetSenderLocale(m)), m.Chat.ID, m.Sender.ID, m.Sender.LanguageCode, usrStatus, usrGroupStatus)
 		}
 	}
 	SmartSendDelete(m, retStr, WithMarkdown())
@@ -754,7 +795,7 @@ func CmdID(m *tb.Message) {
 func CmdPing(m *tb.Message) {
 	defer LazyDelete(m)
 	t := time.Now().UnixMilli()
-	Bot.GetCommands()
+	Bot.Commands()
 	t1 := time.Now().UnixMilli() - t
 	msg, _ := SmartSendDelete(m.Chat, fmt.Sprintf(Locale("cmd.misc.ping.1", GetSenderLocale(m)), t1), WithMarkdown())
 	t2 := time.Now().UnixMilli() - t - t1

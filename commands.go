@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	tb "gopkg.in/tucnak/telebot.v2"
+	tb "gopkg.in/telebot.v3"
 )
 
 func CmdWarnUser(m *tb.Message) {
@@ -23,7 +23,7 @@ func CmdWarnUser(m *tb.Message) {
 				limSenderToken := fmt.Sprintf("lim%d,%d", m.Chat.ID, m.Sender.ID)
 				limReciverToken := fmt.Sprintf("lim%d,%d", m.Chat.ID, m.ReplyTo.Sender.ID)
 				if _, ok := zcomap.Get(token); ok {
-					addCredit(m.Chat.ID, m.Sender, -10, true, OPByAbuse)
+					addCredit(m.Chat.ID, m.Sender, gc.CreditMapping.Duplicated, true, OPByAbuse)
 					SmartSend(m, Locale("cmd.zc.cooldown10", GetSenderLocale(m)))
 				} else if senderLimit, _ := zcomap.Get(limSenderToken); senderLimit >= 2 {
 					zcomap.Add(limReciverToken)
@@ -32,8 +32,9 @@ func CmdWarnUser(m *tb.Message) {
 					zcomap.Add(limSenderToken)
 					zcomap.Add(limReciverToken)
 					zcomap.Set(token, 1)
-					ci := addCredit(m.Chat.ID, m.ReplyTo.Sender, -25, true, OPByAbuse)
-					SmartSend(m.ReplyTo, fmt.Sprintf(Locale("cmd.zc.exec", GetSenderLocale(m)), GetUserName(m.ReplyTo.Sender), GetUserName(m.Sender)))
+					warnCredit := gc.CreditMapping.Warn
+					ci := addCredit(m.Chat.ID, m.ReplyTo.Sender, warnCredit, true, OPByAbuse)
+					SmartSend(m.ReplyTo, fmt.Sprintf(Locale("cmd.zc.exec", GetSenderLocale(m)), GetUserName(m.ReplyTo.Sender), GetUserName(m.Sender), Abs(warnCredit), -50))
 					LazyDelete(m)
 					if ci.Credit < -50 {
 						Ban(m.Chat.ID, m.ReplyTo.Sender.ID, 0)
@@ -47,7 +48,8 @@ func CmdWarnUser(m *tb.Message) {
 }
 
 func CmdBanUser(m *tb.Message) {
-	if IsGroup(m.Chat.ID) && m.ReplyTo != nil {
+	gc := GetGroupConfig(m.Chat.ID)
+	if gc != nil && m.ReplyTo != nil {
 		if m.Sender.ID > 0 && m.Sender.Username != "Channel_Bot" {
 			if m.ReplyTo.Sender.ID == m.Sender.ID {
 				if Ban(m.Chat.ID, m.Sender.ID, 1800) == nil {
@@ -81,15 +83,17 @@ func CmdBanUser(m *tb.Message) {
 				vtToken := fmt.Sprintf("vt-%d,%d", m.Chat.ID, userId)
 				token := fmt.Sprintf("ad-%d,%d", m.Chat.ID, m.Sender.ID)
 				if zcomap.Add(token) > 3 {
-					addCredit(m.Chat.ID, m.Sender, -5, true, OPByAbuse)
+					addCredit(m.Chat.ID, m.Sender, gc.CreditMapping.Duplicated, true, OPByAbuse)
 					SmartSend(m, Locale("cmd.ey.cooldown5", GetSenderLocale(m)))
 				} else {
 					if _, ok := votemap.Get(vtToken); !ok {
 						if Ban(m.Chat.ID, userId, 1800) == nil {
-							addCredit(m.Chat.ID, m.ReplyTo.Sender, -50, true, OPByAbuse)
-							addCredit(m.Chat.ID, m.Sender, 15, true, OPByAbuse)
+							banCredit := gc.CreditMapping.Ban
+							banBounsCredit := gc.CreditMapping.BanBouns
+							addCredit(m.Chat.ID, m.ReplyTo.Sender, banCredit, true, OPByAbuse)
+							addCredit(m.Chat.ID, m.Sender, banBounsCredit, true, OPByAbuse)
 							votemap.Set(vtToken, 0)
-							msgTxt := fmt.Sprintf(Locale("cmd.ey.exec", GetSenderLocale(m)), GetUserName(m.ReplyTo.Sender), GetUserName(m.Sender))
+							msgTxt := fmt.Sprintf(Locale("cmd.ey.exec", GetSenderLocale(m)), GetUserName(m.ReplyTo.Sender), GetUserName(m.Sender), Abs(banCredit), Abs(banBounsCredit), 6)
 							SendBtns(m.ReplyTo, msgTxt, "", GenVMBtns(0, m.Chat.ID, userId, m.Sender.ID))
 							LazyDelete(m)
 							LazyDelete(m.ReplyTo)

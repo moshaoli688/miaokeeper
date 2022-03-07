@@ -1,7 +1,7 @@
 package main
 
 import (
-	tb "gopkg.in/tucnak/telebot.v2"
+	tb "gopkg.in/telebot.v3"
 )
 
 var LocaleAlias = map[string]string{
@@ -11,8 +11,10 @@ var LocaleAlias = map[string]string{
 
 var LocaleMap = map[string]map[string]string{
 	"zh": {
-		"system.unexpected": "❌ 无法完成任务，请检查服务器错误日志",
-		"system.notsend":    "❌ 发送消息失败",
+		"system.unexpected":      "❌ 无法完成任务，请检查服务器错误日志",
+		"system.notsend":         "❌ 发送消息失败",
+		"system.wrongUsage":      "❌ 使用方法不对啦！要这么用呢: `%s`",
+		"system.unexpectedError": "❌ 发生了意外: %s",
 
 		"cmd.getToken":       "*🔍 生成成功*\n\n群组名称: `%s`\n群组 ID: `%d`\nAPI 令牌: `%s`\n回调签名: `%s`",
 		"cmd.zc.notAllowed":  "当前群组不允许互相臭嘴哦 ~",
@@ -20,7 +22,7 @@ var LocaleMap = map[string]map[string]string{
 		"cmd.zc.cantBan":     "我拿它没办法呢 ...",
 		"cmd.zc.cooldown10":  "😠 你自己先漱漱口呢，不要连续臭别人哦！扣 10 分警告一下",
 		"cmd.zc.cooldown":    "😳 用指令对线是不对的，请大家都冷静下呢～",
-		"cmd.zc.exec":        "👮 %s, 您被热心的 %s 警告了 ⚠️，请注意管理好自己的行为！暂时扣除 25 分作为警告，如果您的分数低于 -50 分将被直接禁言。若您觉得这是恶意举报，请理性对待，并联系群管理员处理。",
+		"cmd.zc.exec":        "👮 %s, 您被热心的 %s 警告了 ⚠️，请注意管理好自己的行为！暂时扣除 %d 分作为警告，如果您的分数低于 %d 分将被直接禁言。若您觉得这是恶意举报，请理性对待，并联系群管理员处理。",
 		"cmd.zc.noAnonymous": "😠 匿名就不要乱啵啵啦！叭了个叭叭了个叭叭了个叭 ...",
 
 		"cmd.ey.selfReport":  "👮 举报自己？那没办法...只好把你 🫒 半小时哦～",
@@ -29,7 +31,7 @@ var LocaleMap = map[string]map[string]string{
 		"cmd.ey.killChannel": "👮 好的！这就把这个频道封掉啦～ PS: %s 的主人，如果您觉得这是恶意举报，请赶快联系管理员解封哦 ～）",
 		"cmd.ey.killBot":     "👮 好的！这就把这个机器人封禁半小时～ PS: %s 的主人，如果您觉得这是恶意举报，请赶快联系管理员解封哦 ～）",
 		"cmd.ey.cooldown5":   "😠 消停一下消停一下，举报太多次啦，扣 5 分缓一缓",
-		"cmd.ey.exec":        "👮 %s, 您被热心群友 %s 报告有发送恶意言论的嫌疑 ⚠️，请注意自己的发言哦！暂时禁言半小时并扣除 50 分作为警告，举报者 15 分奖励已到账。若您觉得这是恶意举报，可以呼吁小伙伴们公投为您解封（累计满 6 票可以解封并抵消扣分），或者直接联系群管理员处理。",
+		"cmd.ey.exec":        "👮 %s, 您被热心群友 %s 报告有发送恶意言论的嫌疑 ⚠️，请注意自己的发言哦！暂时禁言半小时并扣除 %d 分作为警告，举报者 %d 分奖励已到账。若您觉得这是恶意举报，可以呼吁小伙伴们公投为您解封（累计满 %d 票可以解封并抵消扣分），或者直接联系群管理员处理。",
 		"cmd.ey.duplicated":  "👮 他已经被检察官带走啦，不要鞭尸啦 ～",
 
 		"cmd.privateSession":          "👀 请回复这则消息一个文件来为群组 `%s`(%d) 设置 {%s} 哦～",
@@ -44,9 +46,9 @@ var LocaleMap = map[string]map[string]string{
 
 		"cmd.misc.version":       "👀 当前版本为: %s",
 		"cmd.misc.replyid.chat":  "*群组 ID:* `%d`\n*回复匿名群 ID:* `%d`\n*回复匿名群类型:* `%s`",
-		"cmd.misc.replyid.user":  "*群组 ID:* `%d`\n*回复用户 ID:* `%d`\n*回复用户语言:* `%s`",
+		"cmd.misc.replyid.user":  "*群组 ID:* `%d`\n*回复用户 ID:* `%d`\n*回复用户语言:* `%s`\n*回复用户状态:* `%v`\n*回复用户验证状态:* `%v`",
 		"cmd.misc.id.chat":       "*群组 ID:* `%d`\n*匿名群 ID:* `%d`\n*匿名群类型:* `%s`",
-		"cmd.misc.id.user":       "*群组 ID:* `%d`\n*用户 ID:* `%d`\n*用户语言:* `%s`",
+		"cmd.misc.id.user":       "*群组 ID:* `%d`\n*用户 ID:* `%d`\n*用户语言:* `%s`\n*用户状态:* `%v`\n*验证状态:* `%v`",
 		"cmd.misc.ping.1":        "🔗 与 Telegram 伺服器的延迟约为:\n\n机器人 DC: `%dms`",
 		"cmd.misc.ping.2":        "🔗 与 Telegram 伺服器的延迟约为:\n\n机器人 DC: `%dms`\n群组 DC: `%dms`",
 		"cmd.misc.user.notExist": "❌ 用户记录不存在",
@@ -55,6 +57,8 @@ var LocaleMap = map[string]map[string]string{
 		"cmd.misc.prevPage":      "⬆️ 上一页",
 		"cmd.misc.atPage":        "第 %d 页",
 		"cmd.misc.nextPage":      "⬇️ 下一页",
+		"cmd.misc.get.success":   "✔️ *读取成功啦 ~*\n\n*键: *`%v`\n*值: *`%v`",
+		"cmd.misc.set.success":   "✔️ *修改成功啦 ~*\n\n*原始值: *`%v`\n*修改后: *`%s`",
 
 		"cmd.credit.logHead": "📖 `%d` 积分记录:\n\n%s",
 
@@ -119,12 +123,13 @@ var LocaleMap = map[string]map[string]string{
 		"channel.set.success":          "✔️ 已经设置好加群频道验证啦 `(Join=%v, Msg=%v)` ～",
 		"channel.bot.permit":           "👏 欢迎 %s 加入群组，已为机器人自动放行 ～",
 		"channel.user.alreadyFollowed": "👏 欢迎 %s 加入群组，您已关注频道自动放行 ～",
-		"channel.request":              "[🎉](tg://user?id=%d) 欢迎 `%s`，您还没有关注本群组关联的频道哦，您有 5 分钟时间验证自己 ～ 请点击下面按钮跳转到频道关注后再回来验证以解除发言限制 ～",
+		"channel.request":              "[🎉](tg://user?id=%d) 欢迎 `%s`，您还没有关注本群组关联的频道哦，您有 %d 秒时间验证自己 ～ 请点击下面按钮跳转到频道关注后再回来验证以解除发言限制 ～",
 		"channel.cannotSendMsg":        "❌ 无法发送验证消息，请管理员检查群组权限 ～",
 		"channel.cannotBanUser":        "❌ 无法完成验证流程，请管理员检查机器人封禁权限 ～",
 		"channel.cannotCheckChannel":   "❌ 无法检测用户是否在目标频道内，请管理员检查机器人权限 ～",
-		"channel.pattern.kicked":       "👮‍♀️ [TA](tg://user?id=%d) 的名字命中了广告规则，已自动放逐 15 秒。如果有误杀请联系管理员处理 ～",
+		"channel.pattern.kicked":       "\u200d [TA](tg://user?id=%d) 的名字命中了广告规则，已自动放逐 15 秒。如果有误杀请联系管理员处理 ～",
 		"channel.kicked":               "👀 [TA](tg://user?id=%d) 没有在规定时间内完成验证，已经被我带走啦 ～",
+		"channel.kicked.underAttack":   "⚠️ [TA](tg://user?id=%d) 由于在风控模式下申请加入群组，已被自动隔离 ～",
 
 		"locale.set": "✔️ 设置成功，当前群组的默认语言为: %s ～",
 		"locale.get": "👀 当前群组的默认语言为: %s ～",
@@ -135,7 +140,7 @@ var LocaleMap = map[string]map[string]string{
 		"btn.notFair":         "😠 这不公平 (%d)|vote?u=%d&s=%d",
 
 		"btn.adminPanel":    "🚩 解封[管理]|unban?u=%d&s=%d||🚮 清退[管理]|kick?u=%d&s=%d",
-		"btn.channel.step1": "👉 第一步：关注频道 👈|https://t.me/%s",
+		"btn.channel.step1": "👉 第一步：关注频道 👈|%s",
 		"btn.channel.step2": "👉 第二步：点我验证 👈|check?u=%d",
 
 		"cb.unblock.byadmin": "\n\nTA 已被管理员解封 👊",
@@ -171,8 +176,10 @@ var LocaleMap = map[string]map[string]string{
 		"cb.disabled":                     "❌ 这个群组还没有被授权哦 ~",
 	},
 	"en": {
-		"system.unexpected": "❌ Cannot fulfill the task, please check logs",
-		"system.notsend":    "❌ Cannot send the message",
+		"system.unexpected":      "❌ Cannot fulfill the task, please check logs",
+		"system.notsend":         "❌ Cannot send the message",
+		"system.wrongUsage":      "❌ Wrong usage: `%s`",
+		"system.unexpectedError": "❌ Unexpected error: %s",
 
 		"cmd.getToken":       "*🔍 Generate Success*\n\nGroup Name: `%s`\nGroup ID: `%d`\nAPI Token: `%s`\nCallback Sign: `%s`",
 		"cmd.zc.notAllowed":  "Warn is not permitted in this group",
@@ -180,7 +187,7 @@ var LocaleMap = map[string]map[string]string{
 		"cmd.zc.cantBan":     "Well, I have nothing to do with it ...",
 		"cmd.zc.cooldown10":  "😠 DO NOT TALK LIKE SHIT, YOU WILL BE PUNISHED BY 10 POINTS",
 		"cmd.zc.cooldown":    "😳 Calm down, calm down ...",
-		"cmd.zc.exec":        "👮 %s, you are warned by %s ⚠️, please do not be too aggressive! You are punished by 25 credit points. If your credit is below -50, you would be restricted in this group. Please contact group admin if you think the judgement is a mistake.",
+		"cmd.zc.exec":        "👮 %s, you are warned by %s ⚠️, please do not be too aggressive! You are punished by %d credit points. If your credit is below %d, you would be restricted in this group. Please contact group admin if you think the judgement is a mistake.",
 		"cmd.zc.noAnonymous": "😠 PLEASE WELL BEHAVE WHEN YOU ARE ANONYMOUS ...",
 
 		"cmd.ey.selfReport":  "👮 Yeah, you know what you are doing. You are restricted for half an hour.",
@@ -189,7 +196,7 @@ var LocaleMap = map[string]map[string]string{
 		"cmd.ey.killChannel": "👮 This channel has been banned, PS: if the owner of %s finds it a mistake, please contact the group admin asap.",
 		"cmd.ey.killBot":     "👮 This bot has been restricted for half an hour, PS: if the owner of %s finds it a mistake, please contact the group admin asap.",
 		"cmd.ey.cooldown5":   "😠 DO NOT TALK LIKE SHIT, YOU WILL BE PUNISHED BY 5 POINTS",
-		"cmd.ey.exec":        "👮 %s, you are reported by %s to shot spam into the group ⚠️, please well behave! You are punished by 50 credit points and the reporter has gained 25 points. Please contact group admin if you think the judgement is a mistake, or you could ask for other members to vote to help.",
+		"cmd.ey.exec":        "👮 %s, you are reported by %s to shot spam into the group ⚠️, please well behave! You are punished by %d credit points and the reporter has gained %d points. Please contact group admin if you think the judgement is a mistake, or you could ask other %d members to vote to help to undo this punishment.",
 		"cmd.ey.duplicated":  "👮 The user has already been banned.",
 
 		"cmd.privateSession":          "👀 Please reply a config file to this message to assign `%s`(%d) a new {%s} config ~",
@@ -215,6 +222,8 @@ var LocaleMap = map[string]map[string]string{
 		"cmd.misc.prevPage":      "⬆️ Last",
 		"cmd.misc.atPage":        "# %d",
 		"cmd.misc.nextPage":      "⬇️ Next",
+		"cmd.misc.get.success":   "✔️ *Read Success ~*\n\n*Key: *`%v`\n*Value: *`%v`",
+		"cmd.misc.set.success":   "✔️ *Write Success ~*\n\n*Original: *`%v`\n*Modified: *`%s`",
 
 		"cmd.credit.logHead": "📖 `%d` Logs:\n\n%s",
 
@@ -279,12 +288,13 @@ var LocaleMap = map[string]map[string]string{
 		"channel.set.success":          "✔️ Group MFC has been turned on `(Join=%v, Msg=%v)` ～",
 		"channel.bot.permit":           "👏 Welcome %s, bots are permitted to join by default ～",
 		"channel.user.alreadyFollowed": "👏 Welcome %s, you already followed the linked channel, you are all set ～",
-		"channel.request":              "[🎉](tg://user?id=%d) Welcome `%s`, you have not yet followed the linked channel of the group for multi-factor CAPTCHA purpose. Please join the channel within 5 minutes to prove you are not a robot ～",
+		"channel.request":              "[🎉](tg://user?id=%d) Welcome `%s`, you have not yet followed the linked channel of the group for multi-factor CAPTCHA purpose. Please join the channel within %d seconds to prove you are not a robot ～",
 		"channel.cannotSendMsg":        "❌ Cannot send the verification message, please check my permission ～",
 		"channel.cannotBanUser":        "❌ Cannot complete the CAPTCHA, please check my permission ～",
 		"channel.cannotCheckChannel":   "❌ Cannot read the user list of targetted channel, please make sure the bot has enough permission in the channel ～",
-		"channel.pattern.kicked":       "👮‍♀️ [The user's](tg://user?id=%d) name has been marked as fraud. If you believe this is a mistake, please contact group admin for help ～",
+		"channel.pattern.kicked":       "\u200d [The user's](tg://user?id=%d) name has been marked as fraud. If you believe this is a mistake, please contact group admin for help ～",
 		"channel.kicked":               "👀 [The user](tg://user?id=%d) did not pass the MFC verification, so it is banned ～",
+		"channel.kicked.underAttack":   "⚠️ [The user's](tg://user?id=%d) request is automatically declined due to some emergency circumstances.",
 
 		"locale.set": "✔️ The default language of this group has been changed to: %s ～",
 		"locale.get": "👀 The default language of this group is: %s ～",
@@ -295,7 +305,7 @@ var LocaleMap = map[string]map[string]string{
 		// "btn.notFair": "😠 这不公平 (%d)|vote?u=%d&s=%d",
 
 		"btn.adminPanel":    "🚩 UNBAN [ADMIN]|unban?u=%d&s=%d||🚮 KICK [ADMIN]|kick?u=%d&s=%d",
-		"btn.channel.step1": "👉 1ST: JOIN THE CHANNEL 👈|https://t.me/%s",
+		"btn.channel.step1": "👉 1ST: JOIN THE CHANNEL 👈|%s",
 		"btn.channel.step2": "👉 2ND: RELEASE ME 👈|check?u=%d",
 
 		"cb.unblock.byadmin": "\n\nThe user is unbanned by admin 👊",
