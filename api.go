@@ -5,12 +5,9 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"sync"
 
 	"github.com/gin-gonic/gin"
 )
-
-var consumeLock sync.Mutex
 
 func GinError(err string) gin.H {
 	return gin.H{
@@ -29,7 +26,7 @@ func GinData(data interface{}) gin.H {
 func GinParseUser(c *gin.Context) *CreditInfo {
 	userId, _ := strconv.ParseInt(c.Param("userId"), 10, 64)
 	if groupId := c.GetInt64("gid"); groupId != 0 {
-		if ci := GetCredit(groupId, userId); ci != nil && ci.ID == userId {
+		if ci := GetCreditInfo(groupId, userId); ci != nil && ci.ID == userId {
 			return ci
 		} else {
 			c.JSON(http.StatusNotFound, GinError("the user does not exist."))
@@ -88,9 +85,6 @@ func InitRESTServer(portNum int) {
 				}
 			})
 			credit.POST("/:userId/consume", func(c *gin.Context) {
-				consumeLock.Lock()
-				defer consumeLock.Unlock()
-
 				if ci := GinParseUser(c); ci != nil {
 					consumeRequest := struct {
 						Credit        int64 `json:"credit,omitempty"`
@@ -98,14 +92,30 @@ func InitRESTServer(portNum int) {
 					}{}
 					c.BindJSON(&consumeRequest)
 					if consumeRequest.Credit > 0 {
-						if ci.Credit >= consumeRequest.Credit || (ci.Credit > 0 && consumeRequest.AllowNegative) {
-							ci = UpdateCredit(ci, UMAdd, -consumeRequest.Credit, OPByAPIConsume)
-							c.JSON(http.StatusOK, GinData(ci))
-						} else {
-							c.JSON(http.StatusNotAcceptable, GinError("the user does not have enough credit."))
-						}
+						ci.Acquire(func() {
+							if ci.Credit >= consumeRequest.Credit || (ci.Credit > 0 && consumeRequest.AllowNegative) {
+								ci.unsafeUpdate(UMAdd, -consumeRequest.Credit, nil, OPByAPIConsume, 0, "")
+								c.JSON(http.StatusOK, GinData(ci))
+							} else {
+								c.JSON(http.StatusNotAcceptable, GinError("the user does not have enough credit."))
+							}
+						})
 					} else {
 						c.JSON(http.StatusBadRequest, GinError("consume credit should be a positive number."))
+					}
+				}
+			})
+			credit.POST("/:userId/bonus", func(c *gin.Context) {
+				if ci := GinParseUser(c); ci != nil {
+					bonusRequest := struct {
+						Credit int64 `json:"credit,omitempty"`
+					}{}
+					c.BindJSON(&bonusRequest)
+					if bonusRequest.Credit > 0 {
+						ci.Update(UMAdd, bonusRequest.Credit, nil, OPByAPIBonus, 0, "")
+						c.JSON(http.StatusOK, GinData(ci))
+					} else {
+						c.JSON(http.StatusBadRequest, GinError("added credit should be a positive number."))
 					}
 				}
 			})

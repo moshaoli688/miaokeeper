@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -144,10 +145,10 @@ func MD5(str string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func SignGroup(groupId int64, signType int) string {
+func SignGroup(groupId int64, signType int, seed string) string {
 	phaseOne := MD5(fmt.Sprintf("MiaoKeeper:Normal:Hash|%d%d|%s|APITK{%d}##^", signType, groupId, APISeed, groupId))
-	phaseTwo := MD5(fmt.Sprintf("501%s5c%dadd%s51ff13%d", phaseOne, signType, phaseOne, signType))
-	phaseThree := MD5(fmt.Sprintf("%s415%s%daff4%s", phaseOne, phaseTwo, signType, phaseOne))
+	phaseTwo := MD5(fmt.Sprintf("501%s5c%dadd%s51f%sf13%d", phaseOne, signType, phaseOne, seed, signType))
+	phaseThree := MD5(fmt.Sprintf("%s415%s%s%daff4%s", phaseOne, seed, phaseTwo, signType, phaseOne))
 
 	return phaseThree
 }
@@ -201,4 +202,51 @@ func PlainError(info string, err error) {
 	if err != nil {
 		DErrorf("Unexpected Error | %s error=%v", info, err.Error())
 	}
+}
+
+func SetInterval(interval time.Duration, fn func()) func() {
+	ticker := time.NewTicker(interval)
+	quit := make(chan bool)
+	active := true
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				go fn()
+			case <-quit:
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+
+	// canceller
+	return func() {
+		if active {
+			active = false
+			quit <- true
+		}
+	}
+}
+
+func Throttle(interval time.Duration) (func(func()), func()) {
+	var adaptor func() = nil
+	updateLock := sync.Mutex{}
+
+	cancel := SetInterval(interval, func() {
+		updateLock.Lock()
+		defer updateLock.Unlock()
+
+		if adaptor != nil {
+			go adaptor()
+		}
+	})
+
+	return func(fn func()) {
+		updateLock.Lock()
+		defer updateLock.Unlock()
+
+		adaptor = fn
+	}, cancel
 }

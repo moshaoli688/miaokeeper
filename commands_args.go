@@ -92,7 +92,7 @@ func CmdSuImportCredit(m *tb.Message) {
 			SmartSendDelete(m, Locale("credit.importParseError", GetSenderLocale(m)))
 			return
 		}
-		FlushCredits(m.Chat.ID, records)
+		FlushCredits(m.Chat.ID, records, m.Sender.ID)
 		SmartSendDelete(m, fmt.Sprintf(Locale("credit.importSuccess", GetSenderLocale(m)), len(records)))
 	} else {
 		SmartSendDelete(m, Locale("cmd.noGroupPerm", GetSenderLocale(m)))
@@ -339,7 +339,7 @@ func CmdSetCredit(m *tb.Message) {
 	defer LazyDelete(m)
 	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
 		addons := ParseStrToInt64Arr(strings.Join(strings.Fields(strings.TrimSpace(m.Payload)), ","))
-		target := &CreditInfo{}
+		target := &UserInfo{}
 		credit := int64(0)
 
 		if len(addons) == 0 {
@@ -355,10 +355,10 @@ func CmdSetCredit(m *tb.Message) {
 		}
 
 		if m.ReplyTo != nil {
-			target = BuildCreditInfo(m.Chat.ID, m.ReplyTo.Sender, false)
+			target.From(m.Chat.ID, m.ReplyTo.Sender)
 		}
-		target = UpdateCredit(target, UMSet, credit, OPByAdminSet)
-		SmartSendDelete(m, fmt.Sprintf(Locale("credit.set.success", GetSenderLocale(m)), target.Credit))
+		ci := UpdateCredit(target, UMSet, credit, OPByAdminSet, m.Sender.ID, "")
+		SmartSendDelete(m, fmt.Sprintf(Locale("credit.set.success", GetSenderLocale(m)), ci.Credit))
 	} else {
 		SmartSendDelete(m, Locale("cmd.noMiaoPerm", GetSenderLocale(m)))
 	}
@@ -368,7 +368,7 @@ func CmdAddCredit(m *tb.Message) {
 	defer LazyDelete(m)
 	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
 		addons := ParseStrToInt64Arr(strings.Join(strings.Fields(strings.TrimSpace(m.Payload)), ","))
-		target := &CreditInfo{}
+		target := &UserInfo{}
 		credit := int64(0)
 
 		if len(addons) == 0 {
@@ -384,10 +384,10 @@ func CmdAddCredit(m *tb.Message) {
 		}
 
 		if m.ReplyTo != nil {
-			target = BuildCreditInfo(m.Chat.ID, m.ReplyTo.Sender, false)
+			target.From(m.Chat.ID, m.ReplyTo.Sender)
 		}
-		target = UpdateCredit(target, UMAdd, credit, OPByAdmin)
-		SmartSendDelete(m, fmt.Sprintf(Locale("credit.set.success", GetSenderLocale(m)), target.Credit))
+		ci := UpdateCredit(target, UMAdd, credit, OPByAdmin, m.Sender.ID, "")
+		SmartSendDelete(m, fmt.Sprintf(Locale("credit.set.success", GetSenderLocale(m)), ci.Credit))
 	} else {
 		SmartSendDelete(m, Locale("cmd.noMiaoPerm", GetSenderLocale(m)))
 	}
@@ -399,7 +399,7 @@ func CmdCheckCredit(m *tb.Message) {
 		if m.Chat.ID > 0 || !m.IsReply() {
 			SmartSendDelete(m, Locale("cmd.mustReply", GetSenderLocale(m)))
 		} else {
-			SmartSendDelete(m, fmt.Sprintf(Locale("credit.check.success", GetSenderLocale(m)), GetQuotableUserName(m.ReplyTo.Sender), GetCredit(m.Chat.ID, m.ReplyTo.Sender.ID).Credit), WithMarkdown())
+			SmartSendDelete(m, fmt.Sprintf(Locale("credit.check.success", GetSenderLocale(m)), GetQuotableUserName(m.ReplyTo.Sender), GetCreditInfo(m.Chat.ID, m.ReplyTo.Sender.ID).Credit), WithMarkdown())
 		}
 	} else {
 		SmartSendDelete(m, Locale("cmd.noGroupPerm", GetSenderLocale(m)))
@@ -692,28 +692,27 @@ func CmdRedpacket(m *tb.Message) {
 			return
 		}
 
-		usercreditlock.Lock()
-		defer usercreditlock.Unlock()
-		ci := GetCredit(m.Chat.ID, m.Sender.ID)
-
-		if ci != nil && ci.Credit >= int64(mc) {
-			chatId := m.Chat.ID
-			addCredit(chatId, m.Sender, -Abs(int64(mc)), true, OPByRedPacket)
-			redpacketId := time.Now().Unix() + int64(rand.Intn(10000))
-			redpacketKey := fmt.Sprintf("%d-%d", chatId, redpacketId)
-			redpacketrankmap.Set(redpacketKey+":sender", GetQuotableUserName(m.Sender))
-			redpacketmap.Set(redpacketKey, mc)
-			redpacketnmap.Set(redpacketKey, n)
-			var buf *bytes.Buffer
-			if gc.RedPacketCaptcha {
-				buffer, results := GenerateRandomCaptcha()
-				redpacketcaptcha.Set(redpacketKey, strings.Join(results, ","))
-				buf = buffer
+		ci := GetCreditInfo(m.Chat.ID, m.Sender.ID)
+		ci.Acquire(func() {
+			if ci.Credit >= int64(mc) {
+				chatId := m.Chat.ID
+				ci.unsafeUpdate(UMAdd, -Abs(int64(mc)), (&UserInfo{}).From(chatId, m.Sender), OPByRedPacket, m.Sender.ID, "SendRedpacket")
+				redpacketId := m.Sender.ID*100000 + int64(rand.Intn(100000))
+				redpacketKey := fmt.Sprintf("%d-%d", chatId, redpacketId)
+				redpacketrankmap.Set(redpacketKey+":sender", GetQuotableUserName(m.Sender))
+				redpacketmap.Set(redpacketKey, mc)
+				redpacketnmap.Set(redpacketKey, n)
+				var buf *bytes.Buffer
+				if gc.RedPacketCaptcha {
+					buffer, results := GenerateRandomCaptcha()
+					redpacketcaptcha.Set(redpacketKey, strings.Join(results, ","))
+					buf = buffer
+				}
+				SendRedPacket(m.Chat, chatId, redpacketId, buf)
+			} else {
+				SmartSendDelete(m, Locale("rp.set.noEnoughCredit", GetSenderLocale(m)))
 			}
-			SendRedPacket(m.Chat, chatId, redpacketId, buf)
-		} else {
-			SmartSendDelete(m, Locale("rp.set.noEnoughCredit", GetSenderLocale(m)))
-		}
+		})
 	} else {
 		SmartSendDelete(m, Locale("cmd.noGroupPerm", GetSenderLocale(m)))
 	}
@@ -728,7 +727,7 @@ func CmdMyCredit(m *tb.Message) {
 			return
 		}
 
-		SmartSendDelete(m, fmt.Sprintf(Locale("credit.check.my", GetSenderLocale(m)), GetQuotableUserName(m.Sender), GetCredit(m.Chat.ID, m.Sender.ID).Credit), WithMarkdown())
+		SmartSendDelete(m, fmt.Sprintf(Locale("credit.check.my", GetSenderLocale(m)), GetQuotableUserName(m.Sender), GetCreditInfo(m.Chat.ID, m.Sender.ID).Credit), WithMarkdown())
 	}
 }
 
@@ -745,18 +744,17 @@ func CmdCreditTransfer(m *tb.Message) {
 		if credit <= 0 || !ValidReplyUser(m) {
 			SmartSendDelete(m, Locale("transfer.invalidParam", GetSenderLocale(m)))
 		} else {
-			usercreditlock.Lock()
-			defer usercreditlock.Unlock()
+			ci := GetCreditInfo(m.Chat.ID, m.Sender.ID)
+			ci.Acquire(func() {
+				if ci.Credit >= int64(credit) {
+					ci.unsafeUpdate(UMAdd, -int64(credit), (&UserInfo{}).From(m.Chat.ID, m.Sender), OPByTransfer, m.ReplyTo.Sender.ID, "Transferer")
+					addCredit(m.Chat.ID, m.ReplyTo.Sender, int64(credit), true, OPByTransfer, m.Sender.ID, "Transferee")
 
-			ci := GetCredit(m.Chat.ID, m.Sender.ID)
-			if ci.Credit >= int64(credit) {
-				addCredit(m.Chat.ID, m.Sender, -int64(credit), true, OPByTransfer)
-				addCredit(m.Chat.ID, m.ReplyTo.Sender, int64(credit), true, OPByTransfer)
-
-				SmartSendDelete(m, fmt.Sprintf(Locale("transfer.success", GetSenderLocale(m)), credit))
-			} else {
-				SmartSendDelete(m, Locale("transfer.noBalance", GetSenderLocale(m)))
-			}
+					SmartSendDelete(m, fmt.Sprintf(Locale("transfer.success", GetSenderLocale(m)), credit))
+				} else {
+					SmartSendDelete(m, Locale("transfer.noBalance", GetSenderLocale(m)))
+				}
+			})
 		}
 	}
 }

@@ -309,19 +309,19 @@ func GenLogDialog(c *tb.Callback, m *tb.Message, groupId int64, offset uint64, l
 	}
 }
 
-func addCreditToMsgSender(chatId int64, m *tb.Message, credit int64, force bool, reason OPReasons) *CreditInfo {
+func addCreditToMsgSender(chatId int64, m *tb.Message, credit int64, force bool, reason OPReasons, notes string) *CreditInfo {
 	if ValidMessageUser(m) {
-		return addCredit(chatId, m.Sender, credit, force, reason)
+		return addCredit(chatId, m.Sender, credit, force, reason, m.Sender.ID, notes)
 	}
 	return nil
 }
 
-func addCredit(chatId int64, user *tb.User, credit int64, force bool, reason OPReasons) *CreditInfo {
+func addCredit(chatId int64, user *tb.User, credit int64, force bool, reason OPReasons, executor int64, notes string) *CreditInfo {
 	gc := GetGroupConfig(chatId)
 	if gc != nil && user != nil && user.ID > 0 && credit != 0 {
 		token := fmt.Sprintf("ac-%d-%d", chatId, user.ID)
 		if force || creditomap.AddBy(token, int(credit)) <= int(gc.CreditMapping.HourlyUpperBound) {
-			return UpdateCredit(BuildCreditInfo(chatId, user, false), UMAdd, credit, reason)
+			return UpdateCredit((&UserInfo{}).From(chatId, user), UMAdd, credit, reason, executor, notes)
 		}
 	}
 	return nil
@@ -337,16 +337,6 @@ func ValidMessageUser(m *tb.Message) bool {
 
 func ValidUser(u *tb.User) bool {
 	return u != nil && u.ID > 0 && !u.IsBot && u.ID != 777000 && u.Username != "Channel_Bot" && u.Username != "GroupAnonymousBot" && u.Username != "Telegram"
-}
-
-func BuildCreditInfo(groupId int64, user *tb.User, autoFetch bool) *CreditInfo {
-	ci := &CreditInfo{
-		user.ID, user.Username, GetUserName(user), 0, groupId,
-	}
-	if autoFetch {
-		ci.Credit = GetCredit(groupId, user.ID).Credit
-	}
-	return ci
 }
 
 func SmartEdit(to *tb.Message, what interface{}, options ...interface{}) (*tb.Message, error) {

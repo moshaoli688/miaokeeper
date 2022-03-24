@@ -23,7 +23,7 @@ func CmdOnText(m *tb.Message) {
 
 		if CheckSpoiler(m) {
 			RevealSpoiler(m)
-			addCreditToMsgSender(m.Chat.ID, m, gc.CreditMapping.Command, true, OPNormal)
+			addCreditToMsgSender(m.Chat.ID, m, gc.CreditMapping.Command, true, OPNormal, "AntiSpoiler")
 			return
 		}
 
@@ -41,15 +41,15 @@ func CmdOnText(m *tb.Message) {
 
 		if puncReg.MatchString(text) {
 			// commands
-			addCreditToMsgSender(m.Chat.ID, m, gc.CreditMapping.Command, true, OPNormal)
+			addCreditToMsgSender(m.Chat.ID, m, gc.CreditMapping.Command, true, OPNormal, "CommandMessage")
 		} else if lastID == userId && text == lastText {
 			// duplicated messages
-			addCreditToMsgSender(m.Chat.ID, m, gc.CreditMapping.Duplicated, true, OPNormal)
+			addCreditToMsgSender(m.Chat.ID, m, gc.CreditMapping.Duplicated, true, OPNormal, "DuplicatedMessage")
 		} else if textLen >= 2 && (lastID != userId || (textLen >= 14 && text != lastText)) {
 			// valid messages
-			addCreditToMsgSender(m.Chat.ID, m, gc.CreditMapping.PerValidTextMessage, false, OPNormal)
+			addCreditToMsgSender(m.Chat.ID, m, gc.CreditMapping.PerValidTextMessage, false, OPNormal, "ValidMessage")
 			if ValidReplyUser(m) {
-				addCreditToMsgSender(m.Chat.ID, m.ReplyTo, gc.CreditMapping.PerValidTextMessage, false, OPNormal)
+				addCreditToMsgSender(m.Chat.ID, m.ReplyTo, gc.CreditMapping.PerValidTextMessage, false, OPNormal, "ValidReply")
 			}
 		}
 
@@ -70,9 +70,9 @@ func CmdOnSticker(m *tb.Message) {
 
 		userId := m.Sender.ID
 		if lastID != userId {
-			addCreditToMsgSender(m.Chat.ID, m, gc.CreditMapping.PerValidStickerMessage, false, OPNormal)
+			addCreditToMsgSender(m.Chat.ID, m, gc.CreditMapping.PerValidStickerMessage, false, OPNormal, "ValidMessage")
 			if ValidReplyUser(m) {
-				addCreditToMsgSender(m.Chat.ID, m.ReplyTo, gc.CreditMapping.PerValidStickerMessage, false, OPNormal)
+				addCreditToMsgSender(m.Chat.ID, m.ReplyTo, gc.CreditMapping.PerValidStickerMessage, false, OPNormal, "ValidReply")
 			}
 		}
 
@@ -103,7 +103,7 @@ func CmdOnUserLeft(m *tb.Message) {
 	gc := GetGroupConfig(m.Chat.ID)
 	if gc != nil && m.UserLeft.ID > 0 {
 		gc.UpdateAdmin(m.UserLeft.ID, UMDel)
-		UpdateCredit(BuildCreditInfo(m.Chat.ID, m.UserLeft, false), UMDel, 0, OPByCleanUp)
+		UpdateCredit((&UserInfo{}).From(m.Chat.ID, m.UserLeft), UMDel, 0, OPByCleanUp, m.UserLeft.ID, "UserLeft")
 	}
 	LazyDelete(m)
 }
@@ -117,7 +117,7 @@ func CmdOnChatMember(ctx tb.Context) error {
 			if cmu.NewChatMember.Role == tb.Kicked ||
 				cmu.NewChatMember.Role == tb.Left {
 				gc.UpdateAdmin(user.ID, UMDel)
-				UpdateCredit(BuildCreditInfo(cmu.Chat.ID, user, false), UMDel, 0, OPByCleanUp)
+				UpdateCredit((&UserInfo{}).From(cmu.Chat.ID, user), UMDel, 0, OPByCleanUp, user.ID, "UserKicked")
 			}
 		}
 	})
