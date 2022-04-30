@@ -2,6 +2,7 @@ package main
 
 import (
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/BBAlliance/miaokeeper/memutils"
@@ -12,7 +13,15 @@ type ObliviousMapIfce struct {
 	driver memutils.MemDriver
 
 	expire time.Duration
+	hold   sync.Mutex
 	utif   bool
+}
+
+func (om *ObliviousMapIfce) Hold(fn func()) {
+	om.hold.Lock()
+	defer om.hold.Unlock()
+
+	fn()
 }
 
 func (om *ObliviousMapIfce) Get(key string) (interface{}, bool) {
@@ -21,6 +30,10 @@ func (om *ObliviousMapIfce) Get(key string) (interface{}, bool) {
 
 func (om *ObliviousMapIfce) Set(key string, value interface{}) interface{} {
 	return om.driver.Write(om.prefix+key, value, om.expire, om.utif)
+}
+
+func (om *ObliviousMapIfce) SetExpire(key string, duration time.Duration) time.Duration {
+	return om.driver.SetExpire(om.prefix+key, duration)
 }
 
 func (om *ObliviousMapIfce) Unset(key string) {
@@ -33,6 +46,10 @@ func (om *ObliviousMapIfce) Exist(key string) bool {
 
 func (om *ObliviousMapIfce) Wipe() {
 	om.driver.Wipe(om.prefix)
+}
+
+func (om *ObliviousMapIfce) WipePrefix(prefix string) {
+	om.driver.WipePrefix(om.prefix + prefix)
 }
 
 type ObliviousMapInt struct {
@@ -66,7 +83,11 @@ func (om *ObliviousMapInt) Get(key string) (int, bool) {
 }
 
 func (om *ObliviousMapInt) Set(key string, value int) int {
-	return om.ObliviousMapIfce.Set(key, value).(int)
+	val := om.ObliviousMapIfce.Set(key, value)
+	if val == nil {
+		return 0
+	}
+	return val.(int)
 }
 
 type ObliviousMapStr struct {
@@ -75,11 +96,18 @@ type ObliviousMapStr struct {
 
 func (om *ObliviousMapStr) Get(key string) (string, bool) {
 	a, b := om.ObliviousMapIfce.Get(key)
+	if a == nil {
+		return "", false
+	}
 	return a.(string), b
 }
 
 func (om *ObliviousMapStr) Set(key string, value string) string {
-	return om.ObliviousMapIfce.Set(key, value).(string)
+	val := om.ObliviousMapIfce.Set(key, value)
+	if val == nil {
+		return ""
+	}
+	return val.(string)
 }
 
 func NewOMapIfce(prefix string, expire time.Duration, updateTimeIfWrite bool, driver memutils.MemDriver) *ObliviousMapIfce {

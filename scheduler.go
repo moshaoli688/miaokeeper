@@ -34,12 +34,14 @@ func InitScheduler() {
 		args := DeleteMessageArgs{}
 		lsc.Arg(&args)
 		if args.ChatId != 0 && args.MessageId != 0 {
-			Bot.Delete(&tb.Message{
+			if err := Bot.Delete(&tb.Message{
 				ID: args.MessageId,
 				Chat: &tb.Chat{
 					ID: args.ChatId,
 				},
-			})
+			}); err != nil {
+				DWarnf("Scheduler Warning | method=deleteMessage warning=deleteMessageFailed details=%s", err.Error())
+			}
 		}
 	})
 

@@ -12,8 +12,10 @@ type MemDriver interface {
 
 	List(prefix string) []string
 	Expire(key string)
+	SetExpire(key string, duration time.Duration) time.Duration
 	Exists(key string) bool
 	Wipe(prefix string)
+	WipePrefix(prefix string)
 }
 
 func Now() int64 {

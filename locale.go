@@ -72,6 +72,10 @@ var LocaleMap = map[string]map[string]string{
 		"policy.importError":      "❌ 无法下载群组策略，请确定您上传的文件格式正确且小于 10MB",
 		"policy.importParseError": "❌ 解析群组策略错误，请确定您上传的文件格式正确",
 
+		"policy.rule.limit.peruser":         "❌ 这个规则已经触发过了，不能再触发了哦",
+		"policy.rule.limit.peruserinterval": "❌ 您已经到达本时段的规则触发数量上限，请稍后再试",
+		"policy.rule.limit.peruserday":      "❌ 您本日的规则触发数量上限，请明日再试",
+
 		"forward.ban.success":   "✔️ TA 已经被我封掉啦 ～",
 		"forward.ban.failure":   "❌ TA 已经被封禁过啦 ～",
 		"forward.unban.success": "✔️ TA 已经被我解封啦 ～",
@@ -236,6 +240,10 @@ var LocaleMap = map[string]map[string]string{
 		"policy.exportSuccess":    "✔️ Group policy exported, please check the result in the private chat.",
 		"policy.importError":      "❌ Unable to fetch the file, please make sure the file is valid and less than 10MB.",
 		"policy.importParseError": "❌ Unable to decode the file, please try again.",
+
+		"policy.rule.limit.peruser":         "❌ You have reached the maximum hit of the rule.",
+		"policy.rule.limit.peruserinterval": "❌ You have reached the rate limit of the rule.",
+		"policy.rule.limit.peruserday":      "❌ You have reached the maximum hit today, please try again tomorrow.",
 
 		"forward.ban.success":   "✔️ The user has been banned ～",
 		"forward.ban.failure":   "❌ The user was banned ～",

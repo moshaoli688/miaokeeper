@@ -39,6 +39,7 @@ var creditomap *ObliviousMapInt
 var votemap *ObliviousMapInt
 
 var joinmap *ObliviousMapInt
+var rulemap *ObliviousMapInt
 
 var redpacketrankmap *ObliviousMapStr
 var redpacketmap *ObliviousMapInt
@@ -226,6 +227,7 @@ func InitTelegramArgs() {
 	creditomap = NewOMapInt("credit/", time.Hour, false, memdriver)
 	votemap = NewOMapInt("vote/", time.Minute*30, false, memdriver)
 	joinmap = NewOMapInt("join/", time.Minute*5+time.Second*30, false, memdriver)
+	rulemap = NewOMapInt("rule/", time.Hour*24*7, false, memdriver)
 
 	redpacketrankmap = NewOMapStr("rprank/", time.Hour*24, false, memdriver)
 	redpacketmap = NewOMapInt("rp/", time.Hour*24, false, memdriver)

@@ -65,6 +65,14 @@ type GroupConfig struct {
 	saveDebouncer func(func()) `json:"-" fw:"-"`
 }
 
+type InvokeOptions struct {
+	Rule      string // unlimit | peruser | peruserinterval | peruserday
+	Value     int64
+	ShowError bool
+	Reset     bool
+	UserOnly  bool
+}
+
 type CustomReplyRule struct {
 	Match   string
 	MatchEx *regexp.Regexp `json:"-"`
@@ -80,6 +88,8 @@ type CustomReplyRule struct {
 	ReplyButtons []string
 	ReplyMode    string // deleteself, deleteorigin, deleteboth
 	ReplyImage   string
+
+	InvokeOptions *InvokeOptions
 
 	lock sync.Mutex `json:"-"`
 }
@@ -190,6 +200,15 @@ func (gc *GroupConfig) Check() *GroupConfig {
 		if crr.ReplyButtons == nil {
 			crr.ReplyButtons = make([]string, 0)
 		}
+		if crr.InvokeOptions == nil {
+			crr.InvokeOptions = &InvokeOptions{
+				Rule:      "unlimit",
+				Value:     0,
+				ShowError: true,
+				Reset:     false,
+				UserOnly:  false,
+			}
+		}
 	}
 
 	if gc.CreditMapping == nil {
@@ -210,6 +229,17 @@ func (gc *GroupConfig) Check() *GroupConfig {
 	}
 
 	return gc
+}
+
+func (gc *GroupConfig) ResetRules() {
+	if gc != nil {
+		for _, rule := range gc.CustomReply {
+			if rule.InvokeOptions != nil && rule.InvokeOptions.Reset {
+				key := fmt.Sprintf("%d-%s:", gc.ID, rule.Name)
+				rulemap.WipePrefix(key)
+			}
+		}
+	}
 }
 
 func (gc *GroupConfig) GenerateSign(signType GroupSignType) string {
@@ -367,6 +397,53 @@ func (gc *GroupConfig) TestCustomReplyRule(m *tb.Message) *CustomReplyRule {
 
 func (gc *GroupConfig) ExecPolicy(m *tb.Message) bool {
 	if rule := gc.TestCustomReplyRule(m); rule != nil {
+		var sent *tb.Message
+		var sendingErr error
+		defer func() {
+			if sent != nil && sendingErr == nil && rule.ReplyMode == "deleteboth" || rule.ReplyMode == "deleteself" {
+				LazyDelete(sent)
+			}
+			if rule.ReplyMode == "deleteboth" || rule.ReplyMode == "deleteorigin" {
+				LazyDelete(m)
+			}
+			if sendingErr != nil {
+				SmartSendDelete(m, Locale("system.notsend", GetSenderLocale(m))+"\n\n"+sendingErr.Error())
+			}
+		}()
+
+		if rule.InvokeOptions != nil {
+			if rule.InvokeOptions.UserOnly && !ValidUser(m.Sender) {
+				return false
+			}
+			key := fmt.Sprintf("%d-%s:%d", gc.ID, rule.Name, m.Sender.ID)
+			switch rule.InvokeOptions.Rule {
+			case "peruser":
+				if rulemap.Add(key) > int(rule.InvokeOptions.Value) {
+					if rule.InvokeOptions.ShowError {
+						SmartSendDelete(m, Locale("policy.rule.limit.peruser", GetSenderLocale(m)))
+					}
+					return false
+				}
+			case "peruserinterval":
+				if rulemap.Add(key) > 1 {
+					if rule.InvokeOptions.ShowError {
+						SmartSendDelete(m, Locale("policy.rule.limit.peruserinterval", GetSenderLocale(m)))
+					}
+					return false
+				} else {
+					rulemap.SetExpire(key, time.Duration(rule.InvokeOptions.Value)*time.Second)
+				}
+			case "peruserday":
+				key += fmt.Sprintf(":%d", time.Now().Day())
+				if rulemap.Add(key) > int(rule.InvokeOptions.Value) {
+					if rule.InvokeOptions.ShowError {
+						SmartSendDelete(m, Locale("policy.rule.limit.peruserday", GetSenderLocale(m)))
+					}
+					return false
+				}
+			}
+		}
+
 		if rule.CreditBehavior != 0 {
 			if ci := GetCreditInfo(gc.ID, m.Sender.ID); ci != nil {
 				abort := false
@@ -410,17 +487,7 @@ func (gc *GroupConfig) ExecPolicy(m *tb.Message) bool {
 				}
 			}
 
-			sent, err := SmartSendWithBtns(target, message, BuildRuleMessages(rule.ReplyButtons, m), WithMarkdown())
-			if sent != nil && err == nil && rule.ReplyMode == "deleteboth" || rule.ReplyMode == "deleteself" {
-				LazyDelete(sent)
-			}
-			if rule.ReplyMode == "deleteboth" || rule.ReplyMode == "deleteorigin" {
-				LazyDelete(m)
-			}
-
-			if err != nil {
-				SmartSendDelete(m, Locale("system.notsend", GetSenderLocale(m))+"\n\n"+err.Error())
-			}
+			sent, sendingErr = SmartSendWithBtns(target, message, BuildRuleMessages(rule.ReplyButtons, m), WithMarkdown())
 		}
 
 		if rule.CallbackURL != "" {

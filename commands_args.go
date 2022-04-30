@@ -64,7 +64,8 @@ func CmdImportPolicy(m *tb.Message) {
 			return
 		}
 		newGC.Admins, newGC.ID, newGC.NameBlackListRegEx = gc.Admins, gc.ID, nil
-		if SetGroupConfig(chatId, newGC.Check()) != nil {
+		if newGCChecked := SetGroupConfig(chatId, newGC.Check()); newGCChecked != nil {
+			newGCChecked.ResetRules()
 			SmartSendDelete(m, Locale("policy.importSuccess", GetSenderLocale(m)))
 		} else {
 			SmartSendDelete(m, Locale("policy.importParseError", GetSenderLocale(m)))

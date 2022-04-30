@@ -2,6 +2,7 @@ package memutils
 
 import (
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 )
@@ -109,6 +110,16 @@ func (md *MemDriverMemory) Expire(key string) {
 	}
 }
 
+func (md *MemDriverMemory) SetExpire(key string, duration time.Duration) time.Duration {
+	md.lock.Lock()
+	defer md.lock.Unlock()
+
+	if _, ok := md.unsafeRead(key); ok {
+		md.timer[key] = Now() + duration.Nanoseconds()
+	}
+	return duration
+}
+
 func (md *MemDriverMemory) List(key string) []string {
 	md.lock.Lock()
 	defer md.lock.Unlock()
@@ -128,4 +139,16 @@ func (md *MemDriverMemory) Wipe(prefix string) {
 	defer md.lock.Unlock()
 
 	md.Init()
+}
+
+func (md *MemDriverMemory) WipePrefix(prefix string) {
+	md.lock.Lock()
+	defer md.lock.Unlock()
+
+	for k := range md.mem {
+		if strings.HasPrefix(k, prefix) {
+			delete(md.mem, k)
+			delete(md.timer, k)
+		}
+	}
 }

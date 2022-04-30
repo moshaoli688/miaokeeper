@@ -70,6 +70,11 @@ func (md *MemDriverRedis) Expire(key string) {
 	md.rdb.Unlink(md.ctx, key)
 }
 
+func (md *MemDriverRedis) SetExpire(key string, duration time.Duration) time.Duration {
+	md.rdb.Expire(md.ctx, key, duration)
+	return duration
+}
+
 func (md *MemDriverRedis) Exists(key string) bool {
 	return md.rdb.Exists(md.ctx, key).Val() == 1
 }
@@ -97,4 +102,8 @@ func (md *MemDriverRedis) Wipe(prefix string) {
 	if err := iter.Err(); err != nil {
 		Log(os.Stdout, "MemDriver Error | Wiping data error err="+err.Error())
 	}
+}
+
+func (md *MemDriverRedis) WipePrefix(prefix string) {
+	md.Wipe(prefix)
 }
