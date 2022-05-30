@@ -12,7 +12,14 @@ FROM alpine:latest
 LABEL maintainer=BBAliance
 
 # disabling cgo when built, so no need to install libc6-compat
-RUN apk add --no-cache ca-certificates
+RUN apk update \
+        && apk upgrade \
+        && apk add --no-cache \
+        && apk add tzdata \
+        ca-certificates \
+        && update-ca-certificates 2>/dev/null || true
+
+ENV TZ Asia/Shanghai
 
 WORKDIR /miaokeeper/
 COPY --from=builder /root/miaokeeper /miaokeeper/miaokeeper
