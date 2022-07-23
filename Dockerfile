@@ -19,7 +19,7 @@ RUN apk update \
         ca-certificates \
         && update-ca-certificates 2>/dev/null || true
 
-ENV TZ Asia/Shanghai
+ENV TZ=Asia/Shanghai
 
 WORKDIR /miaokeeper/
 COPY --from=builder /root/miaokeeper /miaokeeper/miaokeeper
