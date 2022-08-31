@@ -785,11 +785,15 @@ func IsGroupAdminTelegram(c *tb.Chat, u *tb.User) bool {
 	return false
 }
 
-func LazyDelete(m *tb.Message) {
-	lazyScheduler.After(time.Second*10, memutils.LSC("deleteMessage", &DeleteMessageArgs{
+func LazyDeleteAfter(m *tb.Message, second time.Duration) {
+	lazyScheduler.After(time.Second*second, memutils.LSC("deleteMessage", &DeleteMessageArgs{
 		ChatId:    m.Chat.ID,
 		MessageId: m.ID,
 	}))
+}
+
+func LazyDelete(m *tb.Message) {
+	LazyDeleteAfter(m, 10)
 }
 
 var GroupParserReg *regexp.Regexp
