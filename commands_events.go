@@ -140,7 +140,9 @@ func CmdOnUserJoined(m *tb.Message) {
 		if gc.IsBlackListName(m.Sender) {
 			KickOnce(m.Chat.ID, m.Sender.ID)
 			Bot.Delete(m)
-			msg, _ := SmartSend(m.Chat, fmt.Sprintf(Locale("channel.pattern.kicked", GetSenderLocale(m)), m.Sender.ID), WithMarkdown())
+			msg, _ := SendBtnsMarkdown(m.Chat, fmt.Sprintf(Locale("channel.pattern.kicked", GetSenderLocale(m)), m.Sender.ID), "", []string{
+				Locale("btn.close", GetSenderLocale(m)),
+			})
 			if msg != nil {
 				// auto delete message after 5 minutes
 				LazyDeleteAfter(m, 60*5)
