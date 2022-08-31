@@ -170,7 +170,9 @@ func InitCallback() {
 		}
 		joinmap.Unset(joinVerificationId)
 		votemap.Unset(vtToken)
-		SmartEdit(cp.Callback.Message, cp.Callback.Message.Text+Locale("cb.kicked.byadmin", cp.Locale()))
+		EditBtns(cp.Callback.Message, cp.Callback.Message.Text+Locale("cb.kicked.byadmin", cp.Locale()), "", []string{
+			Locale("btn.close", cp.Locale()),
+		})
 	}).ShouldValidGroupAdmin(true).Should("u", "user")
 
 	callbackHandler.Add("check", func(cp *CallbackParams) {

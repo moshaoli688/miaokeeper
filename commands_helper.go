@@ -343,10 +343,7 @@ func ValidUser(u *tb.User) bool {
 
 func SmartEdit(to *tb.Message, what interface{}, options ...interface{}) (*tb.Message, error) {
 	if len(options) == 0 {
-		options = append([]interface{}{&tb.SendOptions{
-			DisableWebPagePreview: true,
-			AllowWithoutReply:     true,
-		}}, options...)
+		options = []interface{}{WithDefault()}
 	}
 	m, err := Bot.Edit(to, what, options...)
 	if err != nil {
@@ -392,10 +389,7 @@ func MakeBtns(prefix string, btns []string) [][]tb.InlineButton {
 }
 
 func SendBtns(to interface{}, what interface{}, prefix string, btns []string) (*tb.Message, error) {
-	return SmartSendInner(to, what, &tb.SendOptions{
-		DisableWebPagePreview: true,
-		AllowWithoutReply:     true,
-	}, &tb.ReplyMarkup{
+	return SmartSendInner(to, what, WithDefault(), &tb.ReplyMarkup{
 		OneTimeKeyboard: true,
 		ResizeKeyboard:  true,
 		ForceReply:      false,
@@ -413,7 +407,7 @@ func SendBtnsMarkdown(to interface{}, what interface{}, prefix string, btns []st
 }
 
 func EditBtns(to *tb.Message, what interface{}, prefix string, btns []string) (*tb.Message, error) {
-	return SmartEdit(to, what, &tb.ReplyMarkup{
+	return SmartEdit(to, what, WithDefault(), &tb.ReplyMarkup{
 		OneTimeKeyboard: true,
 		ResizeKeyboard:  true,
 		ForceReply:      false,
@@ -432,10 +426,7 @@ func EditBtnsMarkdown(to *tb.Message, what interface{}, prefix string, btns []st
 
 func SmartSend(to interface{}, what interface{}, options ...interface{}) (*tb.Message, error) {
 	if len(options) == 0 {
-		return SmartSendInner(to, what, &tb.SendOptions{
-			DisableWebPagePreview: true,
-			AllowWithoutReply:     true,
-		})
+		return SmartSendInner(to, what, WithDefault())
 	}
 	return SmartSendInner(to, what, options...)
 }
@@ -467,10 +458,7 @@ func MakeButtons(btns []string) [][]tb.InlineButton {
 func SmartSendWithBtns(to interface{}, what interface{}, buttons []string, options ...interface{}) (*tb.Message, error) {
 	withOptions := []interface{}{}
 	if len(options) == 0 {
-		withOptions = append(withOptions, &tb.SendOptions{
-			DisableWebPagePreview: true,
-			AllowWithoutReply:     true,
-		})
+		withOptions = append(withOptions, WithDefault())
 	} else {
 		withOptions = options
 	}
@@ -823,6 +811,13 @@ func ParseSession(m *tb.Message) (bool, int64, string) {
 func WithMarkdown() *tb.SendOptions {
 	return &tb.SendOptions{
 		ParseMode:             "Markdown",
+		DisableWebPagePreview: true,
+		AllowWithoutReply:     true,
+	}
+}
+
+func WithDefault() *tb.SendOptions {
+	return &tb.SendOptions{
 		DisableWebPagePreview: true,
 		AllowWithoutReply:     true,
 	}
