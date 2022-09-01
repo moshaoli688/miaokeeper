@@ -176,6 +176,10 @@ func CmdGetPolicy(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
 	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+		if m.SenderChat != nil {
+			SmartSendDelete(m, Locale("cmd.privateChatFirst", GetSenderLocale(m)))
+			return
+		}
 		err := Bot.Notify(m.Sender, tb.UploadingDocument)
 		if err != nil {
 			DErrorE(err, "Cmd Error | Export Policy | Cannot notify user")
@@ -215,6 +219,10 @@ func CmdGetToken(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
 	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+		if m.SenderChat != nil {
+			SmartSendDelete(m, Locale("cmd.privateChatFirst", GetSenderLocale(m)))
+			return
+		}
 		if _, err := SmartSend(m.Sender, fmt.Sprintf(Locale("cmd.getToken", GetSenderLocale(m)), GetQuotableChatName(m.Chat), m.Chat.ID, gc.GenerateSign(GST_API_SIGN), gc.GenerateSign(GST_POLICY_CALLBACK_SIGN)), WithMarkdown()); err == nil {
 			SmartSendDelete(m, Locale("credit.exportSuccess", GetSenderLocale(m)))
 		} else {
