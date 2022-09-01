@@ -704,6 +704,10 @@ func CmdKickUserCommand(m *tb.Message) {
 
 func CmdRedpacket(m *tb.Message) {
 	defer LazyDelete(m)
+	if m.SenderChat != nil {
+		return
+	}
+
 	if gc := GetGroupConfig(m.Chat.ID); gc != nil {
 		if gc.ExecPolicy(m) {
 			return
@@ -754,7 +758,7 @@ func CmdRedpacket(m *tb.Message) {
 
 func CmdMyCredit(m *tb.Message) {
 	defer LazyDelete(m)
-	if m.Chat.ID > 0 {
+	if m.Chat.ID > 0 || m.SenderChat != nil {
 		SmartSendDelete(m, Locale("cmd.mustInGroup", GetSenderLocale(m)))
 	} else if gc := GetGroupConfig(m.Chat.ID); gc != nil {
 		if gc.ExecPolicy(m) {
@@ -767,7 +771,7 @@ func CmdMyCredit(m *tb.Message) {
 
 func CmdCreditTransfer(m *tb.Message) {
 	defer LazyDelete(m)
-	if m.Chat.ID > 0 {
+	if m.Chat.ID > 0 || m.SenderChat != nil {
 		SmartSendDelete(m, Locale("cmd.mustInGroup", GetSenderLocale(m)))
 	} else if gc := GetGroupConfig(m.Chat.ID); gc != nil {
 		if gc.ExecPolicy(m) {
