@@ -215,7 +215,7 @@ func InitCallback() {
 				li.CheckDraw(true)
 			} else if cmdtype == 4 && isSuperAdmin {
 				// for testing, currently only allow global admin to withdraw the lottery
-				li.CheckDraw(true)
+				li.Withdraw()
 			} else if cmdtype == 1 {
 				ci := GetCreditInfo(li.GroupID, cp.TriggerUserID())
 				ci.Acquire(func() {
