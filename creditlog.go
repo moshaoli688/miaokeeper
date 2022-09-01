@@ -19,22 +19,23 @@ type CreditLog struct {
 type OPReasons string
 
 const (
-	OPAll          OPReasons = ""
-	OPFlush        OPReasons = "FLUSH"
-	OPNormal       OPReasons = "NORMAL"
-	OPByAdmin      OPReasons = "ADMIN"
-	OPByAdminSet   OPReasons = "ADMINSET"
-	OPByRedPacket  OPReasons = "REDPACKET"
-	OPByLottery    OPReasons = "LOTTERY"
-	OPByTransfer   OPReasons = "TRANSFER"
-	OPByPolicy     OPReasons = "POLICY"
-	OPByAbuse      OPReasons = "ABUSE"
-	OPByAPIConsume OPReasons = "CONSUME"
-	OPByAPIBonus   OPReasons = "BONUS"
-	OPByCleanUp    OPReasons = "CLEANUP"
+	OPAll              OPReasons = ""
+	OPFlush            OPReasons = "FLUSH"
+	OPNormal           OPReasons = "NORMAL"
+	OPByAdmin          OPReasons = "ADMIN"
+	OPByAdminSet       OPReasons = "ADMINSET"
+	OPByRedPacket      OPReasons = "REDPACKET"
+	OPByLottery        OPReasons = "LOTTERY"
+	OPByLotteryReverse OPReasons = "LOTTERY_REV"
+	OPByTransfer       OPReasons = "TRANSFER"
+	OPByPolicy         OPReasons = "POLICY"
+	OPByAbuse          OPReasons = "ABUSE"
+	OPByAPIConsume     OPReasons = "CONSUME"
+	OPByAPIBonus       OPReasons = "BONUS"
+	OPByCleanUp        OPReasons = "CLEANUP"
 )
 
-var OPAllReasons = []OPReasons{OPAll, OPFlush, OPNormal, OPByAdmin, OPByAdminSet, OPByRedPacket, OPByLottery, OPByTransfer, OPByPolicy, OPByAbuse, OPByAPIConsume, OPByCleanUp}
+var OPAllReasons = []OPReasons{OPAll, OPFlush, OPNormal, OPByAdmin, OPByAdminSet, OPByRedPacket, OPByLottery, OPByLotteryReverse, OPByTransfer, OPByPolicy, OPByAbuse, OPByAPIConsume, OPByCleanUp}
 
 func (op *OPReasons) Repr() string {
 	if *op == OPAll {

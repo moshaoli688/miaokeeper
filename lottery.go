@@ -31,7 +31,7 @@ type DBLotteryParticipation struct {
 var LotteryConfigCache map[string]*LotteryInstance
 var LotteryConfigLock sync.Mutex
 
-// status: -1 not start, 0 start, 1 stopped, 2 finished
+// status: -1 not start, 0 start, 1 stopped, 2 finished, 3 cancelled
 type LotteryInstance struct {
 	ID        string
 	Status    int
@@ -58,7 +58,7 @@ func (li *LotteryInstance) UpdateTelegramMsg() *tb.Message {
 		btns = append(btns, fmt.Sprintf("🤏 我要抽奖|lt?t=1&id=%s", li.ID))
 	}
 	if li.Status >= 0 && li.Status < 2 {
-		btns = append(btns, fmt.Sprintf("📦 手动开奖[管理]|lt?t=3&id=%s", li.ID))
+		btns = append(btns, fmt.Sprintf("📦 手动开奖[管理]|lt?t=3&id=%s||🗑️ 解散抽奖[管理]|lt?t=4&id=%s", li.ID, li.ID))
 	}
 	if li.Status == -1 {
 		btns = append(btns, fmt.Sprintf("🎡 开启活动[管理]|lt?t=2&id=%s", li.ID))
@@ -114,6 +114,8 @@ func (li *LotteryInstance) GenText() string {
 		status = "`待手动开奖`"
 	} else if li.Status == 2 {
 		status = "`已开奖`"
+	} else if li.Status == 3 {
+		status = "`已废弃`"
 	}
 	if li.Status >= 0 {
 		status += fmt.Sprintf("\n*参与人数:* %d", li.Participants())
@@ -208,6 +210,38 @@ func (li *LotteryInstance) StartLottery() {
 			lazyScheduler.After(li.Duration+time.Second, memutils.LSC("checkDraw", &CheckDrawArgs{
 				LotteryId: li.ID,
 			}))
+		}
+	}
+}
+
+func (li *LotteryInstance) Withdraw() {
+	li.JoinLock.Lock()
+	defer li.JoinLock.Unlock()
+
+	if li.Status == 0 {
+		// cancel draw
+		li.Status = 3
+
+		// cancel job
+		// we do not record the async event id
+		// and the event will check the status of the job.
+		// so, currently we do not cancel job automatically
+
+		// update database and telegram status
+		li.Update()
+		li.UpdateTelegramMsg()
+
+		// return all credits to user
+		// TODO: use batch update instead of ci updates
+		// for better performance
+		if li.Limit != 0 && li.Consume {
+			participants := []DBLotteryParticipation{}
+			DB.Table(DBTName("Lottery_Participation")).Where("lotteryid = ?", li.ID).Find(&participants)
+			for _, participant := range participants {
+				if ci := GetCreditInfo(li.GroupID, participant.Participant); ci != nil {
+					ci.Update(UMAdd, int64(li.Limit), nil, OPByLotteryReverse, 0, fmt.Sprintf("ID=%v", li.ID))
+				}
+			}
 		}
 	}
 }

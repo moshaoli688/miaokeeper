@@ -85,7 +85,7 @@ func InitScheduler() {
 		lsc.Arg(&args)
 		if args.LotteryId != "" {
 			li := GetLottery(args.LotteryId)
-			if li.Status != 2 {
+			if li.Status == 0 {
 				li.CheckDraw(false)
 			}
 		}

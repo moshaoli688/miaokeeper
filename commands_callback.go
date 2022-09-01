@@ -207,10 +207,14 @@ func InitCallback() {
 		li := GetLottery(lotteryId)
 		if li != nil {
 			isMiaoGroupAdmin := IsGroupAdminMiaoKo(cp.Callback.Message.Chat, cp.TriggerUser())
+			isSuperAdmin := IsAdmin(cp.TriggerUser().ID)
 			if cmdtype == 2 && isMiaoGroupAdmin {
 				li.StartLottery()
 				cp.Response("cb.lottery.start")
 			} else if cmdtype == 3 && isMiaoGroupAdmin {
+				li.CheckDraw(true)
+			} else if cmdtype == 4 && isSuperAdmin {
+				// for testing, currently only allow global admin to withdraw the lottery
 				li.CheckDraw(true)
 			} else if cmdtype == 1 {
 				ci := GetCreditInfo(li.GroupID, cp.TriggerUserID())
@@ -218,7 +222,7 @@ func InitCallback() {
 					if ci.Credit >= int64(li.Limit) {
 						if err := li.Join(cp.TriggerUserID(), GetQuotableUserName(cp.TriggerUser())); err == nil {
 							if li.Consume {
-								ci.unsafeUpdate(UMAdd, -int64(li.Limit), (&UserInfo{}).From(li.GroupID, cp.TriggerUser()), OPByLottery, cp.TriggerUserID(), "LotteryConsume")
+								ci.unsafeUpdate(UMAdd, -int64(li.Limit), (&UserInfo{}).From(li.GroupID, cp.TriggerUser()), OPByLottery, cp.TriggerUserID(), fmt.Sprintf("ID=%v", li.ID))
 							}
 							cp.Response("cb.lottery.enroll")
 							if li.Participant > 0 {
