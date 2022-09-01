@@ -221,11 +221,11 @@ func GenLogDialog(c *tb.Callback, m *tb.Message, groupId int64, offset uint64, l
 	if c == nil && m == nil {
 		return
 	}
-	var operator *tb.User = nil
+	var operator int64 = 0
 	inGroup := false
 	locale := ""
 	if c == nil {
-		operator = m.Sender
+		operator = GetSenderRealID(m)
 		locale = GetSenderLocale(m)
 		_, ah := ArgParse(m.Payload)
 		inGroup, _ = ah.Bool("ingroup")
@@ -238,7 +238,7 @@ func GenLogDialog(c *tb.Callback, m *tb.Message, groupId int64, offset uint64, l
 			}
 		}
 	} else {
-		operator = c.Sender
+		operator = c.Sender.ID
 		locale = GetSenderLocaleCallback(c)
 	}
 
@@ -557,6 +557,15 @@ func GetUserName(u *tb.User) string {
 	return s
 }
 
+// if it is the senderChat return chat id
+// otherwise, return sender user id
+func GetSenderRealID(m *tb.Message) int64 {
+	if m.SenderChat != nil {
+		return m.SenderChat.ID
+	}
+	return m.Sender.ID
+}
+
 func GetQuotableStr(f string) string {
 	f = strings.ReplaceAll(f, "`", "'")
 	f = strings.ReplaceAll(f, "[", "【")
@@ -756,21 +765,35 @@ func IsAdmin(uid int64) bool {
 	return I64In(&ADMINS, uid)
 }
 
-func IsGroupAdmin(c *tb.Chat, u *tb.User) bool {
-	isGAS := IsGroupAdminMiaoKo(c, u)
+// use uid instead to either support anonymous group auth + user auth
+func IsGroupAdmin(c *tb.Chat, uid int64) bool {
+	isGAS := IsGroupAdminMiaoKo(c, uid)
 	if isGAS {
 		return true
 	}
-	return IsGroupAdminTelegram(c, u)
+	return IsGroupAdminTelegram(c, uid)
 }
 
-func IsGroupAdminMiaoKo(c *tb.Chat, u *tb.User) bool {
+func IsGroupAdminMiaoKo(c *tb.Chat, uid int64) bool {
+	if uid == c.ID {
+		// if the user is anonymous via current group
+		// it must be the creator and he/she should be
+		// miaokeeper admin
+		return true
+	}
+
 	gc := GetGroupConfig(c.ID)
-	return gc != nil && gc.IsAdmin(u.ID)
+	return gc != nil && gc.IsAdmin(uid)
 }
 
-func IsGroupAdminTelegram(c *tb.Chat, u *tb.User) bool {
-	cm, _ := Bot.ChatMemberOf(c, u)
+func IsGroupAdminTelegram(c *tb.Chat, uid int64) bool {
+	if uid < 0 {
+		// with auth with group, only accept current group id
+		// as group admin (it must be the creator of the group)
+		return uid == c.ID
+	}
+
+	cm, _ := Bot.ChatMemberOf(c, &tb.User{ID: uid})
 	if cm != nil && (cm.Role == tb.Administrator || cm.Role == tb.Creator) {
 		return true
 	}

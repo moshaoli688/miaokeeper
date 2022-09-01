@@ -206,8 +206,8 @@ func InitCallback() {
 		lotteryId, _ := cp.GetString("id")
 		li := GetLottery(lotteryId)
 		if li != nil {
-			isMiaoGroupAdmin := IsGroupAdminMiaoKo(cp.Callback.Message.Chat, cp.TriggerUser())
-			isSuperAdmin := IsAdmin(cp.TriggerUser().ID)
+			isMiaoGroupAdmin := IsGroupAdminMiaoKo(cp.Callback.Message.Chat, cp.TriggerUserID())
+			isSuperAdmin := IsAdmin(cp.TriggerUserID())
 			if cmdtype == 2 && isMiaoGroupAdmin {
 				li.StartLottery()
 				cp.Response("cb.lottery.start")

@@ -180,17 +180,17 @@ func (chc *CallbackHandlerConfig) Parse(c *tb.Callback) *CallbackParams {
 	if chc.ShouldInGroup && GetGroupConfig(c.Message.Chat.ID) == nil {
 		return nil
 	}
-	if chc.ShouldMiaoAdmin && !IsGroupAdminMiaoKo(c.Message.Chat, c.Sender) {
+	if chc.ShouldMiaoAdmin && !IsGroupAdminMiaoKo(c.Message.Chat, c.Sender.ID) {
 		return nil
 	}
-	if chc.ShouldGroupAdmin && !IsGroupAdmin(c.Message.Chat, c.Sender) {
+	if chc.ShouldGroupAdmin && !IsGroupAdmin(c.Message.Chat, c.Sender.ID) {
 		return nil
 	}
 	if u, err := url.ParseQuery(queryString); err == nil && u != nil {
 		qs := CallbackParams{u, c}
 		if chc.ShouldMiaoAdminOpt != "" {
 			gid, _ := qs.GetGroupId(chc.ShouldMiaoAdminOpt)
-			if !IsGroupAdminMiaoKo(&tb.Chat{ID: gid}, c.Sender) {
+			if !IsGroupAdminMiaoKo(&tb.Chat{ID: gid}, c.Sender.ID) {
 				return nil
 			}
 		}
