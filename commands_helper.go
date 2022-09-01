@@ -353,9 +353,13 @@ func SmartEdit(to *tb.Message, what interface{}, options ...interface{}) (*tb.Me
 }
 
 func SmartSendDelete(to interface{}, what interface{}, options ...interface{}) (*tb.Message, error) {
+	return SmartSendDeleteAfter(to, what, 10, options...)
+}
+
+func SmartSendDeleteAfter(to interface{}, what interface{}, second time.Duration, options ...interface{}) (*tb.Message, error) {
 	msg, err := SmartSend(to, what, options...)
 	if err == nil && msg != nil {
-		LazyDelete(msg)
+		LazyDeleteAfter(msg, second)
 	}
 	return msg, err
 }

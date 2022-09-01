@@ -73,7 +73,7 @@ func InitScheduler() {
 						SmartSendDelete(fakeMsg.Chat, textMsg, WithMarkdown())
 					} else {
 						KickOnce(fakeMsg.Chat.ID, fakeMsg.Sender.ID)
-						SmartSend(fakeMsg.Chat, textMsg, WithMarkdown())
+						SmartSendDeleteAfter(fakeMsg.Chat, textMsg, 5*60, WithMarkdown())
 					}
 				}
 			}
