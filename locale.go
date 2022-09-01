@@ -222,9 +222,9 @@ var LocaleMap = map[string]map[string]string{
 
 		"cmd.misc.version":       "👀 Current Version: %s",
 		"cmd.misc.replyid.chat":  "*Chat ID:* `%d`\n*Reply SenderChat ID:* `%d`\n*Reply SenderChat Type:* `%s`",
-		"cmd.misc.replyid.user":  "*Chat ID:* `%d`\n*Reply User ID:* `%d`\n*Reply User Locale:* `%s`",
+		"cmd.misc.replyid.user":  "*Chat ID:* `%d`\n*Reply User ID:* `%d`\n*Reply User Locale:* `%s`\n*Reply User Status:* `%v`\n*Reply User Verification:* `%v`",
 		"cmd.misc.id.chat":       "*Chat ID:* `%d`\n*SenderChat ID:* `%d`\n*SenderChat Type:* `%s`",
-		"cmd.misc.id.user":       "*Chat ID:* `%d`\n*User ID:* `%d`\n*User Locale:* `%s`",
+		"cmd.misc.id.user":       "*Chat ID:* `%d`\n*User ID:* `%d`\n*User Locale:* `%v`\n*User Status:* `%v`\n*User Verification:* `%v`",
 		"cmd.misc.ping.1":        "🔗 Telegram Server Transmission Delay:\n\nBot DC: `%dms`",
 		"cmd.misc.ping.2":        "🔗 Telegram Server Transmission Delay:\n\nBot DC: `%dms`\nGroup DC: `%dms`",
 		"cmd.misc.user.notExist": "❌ The credit info of the user does not exist",

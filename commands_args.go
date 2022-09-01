@@ -47,7 +47,7 @@ func CmdImportPolicy(m *tb.Message) {
 		chatId = cid
 	}
 	gc := GetGroupConfig(chatId)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
 		Bot.Notify(m.Chat, tb.UploadingDocument)
 		ioHandler, err := Bot.File(&m.Document.File)
 		if err != nil {
@@ -175,7 +175,7 @@ func CmdSuDelAdmin(m *tb.Message) {
 func CmdGetPolicy(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
 		if m.SenderChat != nil {
 			SmartSendDelete(m, Locale("cmd.privateChatFirst", GetSenderLocale(m)))
 			return
@@ -202,7 +202,11 @@ func CmdGetPolicy(m *tb.Message) {
 func CmdSetPolicy(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
+		if m.SenderChat != nil {
+			SmartSendDelete(m, Locale("cmd.privateChatFirst", GetSenderLocale(m)))
+			return
+		}
 		_, err := SmartSend(m.Sender, fmt.Sprintf(Locale("cmd.privateSession", GetSenderLocale(m)), GetQuotableChatName(m.Chat), m.Chat.ID, "Policy"), WithMarkdown())
 		if err != nil {
 			DErrorE(err, "Cmd Error | Import Policy | Cannot send user session")
@@ -218,7 +222,7 @@ func CmdSetPolicy(m *tb.Message) {
 func CmdGetToken(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
 		if m.SenderChat != nil {
 			SmartSendDelete(m, Locale("cmd.privateChatFirst", GetSenderLocale(m)))
 			return
@@ -236,8 +240,8 @@ func CmdGetToken(m *tb.Message) {
 func CmdAddAdmin(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) && m.ReplyTo != nil {
-		if gc.UpdateAdmin(m.ReplyTo.Sender.ID, UMAdd) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) && m.ReplyTo != nil {
+		if gc.UpdateAdmin(GetSenderRealID(m.ReplyTo), UMAdd) {
 			SmartSendDelete(m.ReplyTo, Locale("grant.assign.success", GetSenderLocale(m)))
 		} else {
 			SmartSendDelete(m.ReplyTo, Locale("grant.assign.failure", GetSenderLocale(m)))
@@ -250,7 +254,7 @@ func CmdAddAdmin(m *tb.Message) {
 func CmdSetConfig(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
 		extra := strings.Fields(m.Payload)
 		if len(extra) != 2 {
 			SmartSendDelete(m, fmt.Sprintf(Locale("system.wrongUsage", GetSenderLocale(m)), "/set <ConfigPath> <Value>"), WithMarkdown())
@@ -267,7 +271,7 @@ func CmdSetConfig(m *tb.Message) {
 func CmdGetConfig(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
 		extra := strings.Fields(m.Payload)
 		if len(extra) != 1 {
 			SmartSendDelete(m, fmt.Sprintf(Locale("system.wrongUsage", GetSenderLocale(m)), "/get <ConfigPath>"), WithMarkdown())
@@ -284,8 +288,8 @@ func CmdGetConfig(m *tb.Message) {
 func CmdDelAdmin(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) && m.ReplyTo != nil {
-		if gc.UpdateAdmin(m.ReplyTo.Sender.ID, UMDel) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) && m.ReplyTo != nil {
+		if gc.UpdateAdmin(GetSenderRealID(m.ReplyTo), UMDel) {
 			SmartSendDelete(m.ReplyTo, Locale("grant.dismiss.success", GetSenderLocale(m)))
 		} else {
 			SmartSendDelete(m.ReplyTo, Locale("grant.dismiss.failure", GetSenderLocale(m)))
@@ -298,7 +302,7 @@ func CmdDelAdmin(m *tb.Message) {
 func CmdBanForward(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
 		isReply := false
 		id, _ := strconv.ParseInt(m.Payload, 10, 64)
 		if id == 0 && m.IsReply() && m.ReplyTo.IsForwarded() && m.ReplyTo.OriginalChat != nil {
@@ -325,7 +329,7 @@ func CmdBanForward(m *tb.Message) {
 func CmdUnbanForward(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
 		id, _ := strconv.ParseInt(m.Payload, 10, 64)
 		if id == 0 && m.IsReply() && m.ReplyTo.IsForwarded() && m.ReplyTo.OriginalChat != nil {
 			id = m.ReplyTo.OriginalChat.ID
