@@ -49,68 +49,64 @@ func CmdWarnUser(m *tb.Message) {
 
 func CmdBanUser(m *tb.Message) {
 	gc := GetGroupConfig(m.Chat.ID)
-	if IsGroupAdmin(c.Message.Chat, c.Sender.ID) {
-		if gc != nil && m.ReplyTo != nil {
-			if m.Sender.ID > 0 && m.Sender.Username != "Channel_Bot" {
-				if m.ReplyTo.Sender.ID == m.Sender.ID {
-					if Ban(m.Chat.ID, m.Sender.ID, 1800) == nil {
-						SmartSend(m, Locale("cmd.ey.selfReport", GetSenderLocale(m)))
-						LazyDelete(m.ReplyTo)
-					} else {
-						SmartSend(m, Locale("cmd.ey.notSuccess", GetSenderLocale(m)))
-					}
-				} else if m.ReplyTo.Sender.IsBot && m.ReplyTo.SenderChat != nil {
-					if m.ReplyTo.SenderChat != nil && m.ReplyTo.SenderChat.ID != m.Chat.ID {
-						if BanChannel(m.Chat.ID, m.ReplyTo.SenderChat.ID) == nil {
-							SmartSend(m, fmt.Sprintf(Locale("cmd.ey.killChannel", GetSenderLocale(m)), GetChatName(m.ReplyTo.SenderChat)))
-							LazyDelete(m)
-							LazyDelete(m.ReplyTo)
-						} else {
-							SmartSend(m, Locale("cmd.ey.notSuccess", GetSenderLocale(m)))
-						}
-					} else {
-						SmartSend(m, Locale("cmd.ey.unexpected", GetSenderLocale(m)))
-					}
-				} else if m.ReplyTo.Sender.IsBot {
-					if Ban(m.Chat.ID, m.ReplyTo.Sender.ID, 1800) == nil {
-						SmartSend(m, fmt.Sprintf(Locale("cmd.ey.killBot", GetSenderLocale(m)), GetUserName(m.ReplyTo.Sender)))
+	if gc != nil && m.ReplyTo != nil {
+		if m.Sender.ID > 0 && m.Sender.Username != "Channel_Bot" {
+			if m.ReplyTo.Sender.ID == m.Sender.ID {
+				if Ban(m.Chat.ID, m.Sender.ID, 1800) == nil {
+					SmartSend(m, Locale("cmd.ey.selfReport", GetSenderLocale(m)))
+					LazyDelete(m.ReplyTo)
+				} else {
+					SmartSend(m, Locale("cmd.ey.notSuccess", GetSenderLocale(m)))
+				}
+			} else if m.ReplyTo.Sender.IsBot && m.ReplyTo.SenderChat != nil {
+				if m.ReplyTo.SenderChat != nil && m.ReplyTo.SenderChat.ID != m.Chat.ID {
+					if BanChannel(m.Chat.ID, m.ReplyTo.SenderChat.ID) == nil {
+						SmartSend(m, fmt.Sprintf(Locale("cmd.ey.killChannel", GetSenderLocale(m)), GetChatName(m.ReplyTo.SenderChat)))
 						LazyDelete(m)
 						LazyDelete(m.ReplyTo)
 					} else {
 						SmartSend(m, Locale("cmd.ey.notSuccess", GetSenderLocale(m)))
 					}
 				} else {
-					userId := m.ReplyTo.Sender.ID
-					vtToken := fmt.Sprintf("vt-%d,%d", m.Chat.ID, userId)
-					token := fmt.Sprintf("ad-%d,%d", m.Chat.ID, m.Sender.ID)
-					if zcomap.Add(token) > 3 {
-						addCredit(m.Chat.ID, m.Sender, gc.CreditMapping.Duplicated, true, OPByAbuse, m.Sender.ID, "BanCoolDown")
-						SmartSend(m, Locale("cmd.ey.cooldown5", GetSenderLocale(m)))
-					} else {
-						if _, ok := votemap.Get(vtToken); !ok {
-							if Ban(m.Chat.ID, userId, 1800) == nil {
-								banCredit := gc.CreditMapping.Ban
-								banBounsCredit := gc.CreditMapping.BanBouns
-								addCredit(m.Chat.ID, m.ReplyTo.Sender, banCredit, true, OPByAbuse, m.Sender.ID, "BanPunishment")
-								addCredit(m.Chat.ID, m.Sender, banBounsCredit, true, OPByAbuse, m.ReplyTo.Sender.ID, "BanBonus")
-								votemap.Set(vtToken, 0)
-								msgTxt := fmt.Sprintf(Locale("cmd.ey.exec", GetSenderLocale(m)), GetUserName(m.ReplyTo.Sender), GetUserName(m.Sender), Abs(banCredit), Abs(banBounsCredit), 6)
-								SendBtns(m.ReplyTo, msgTxt, "", GenVMBtns(0, m.Chat.ID, userId, m.Sender.ID))
-								LazyDelete(m)
-								LazyDelete(m.ReplyTo)
-							} else {
-								SmartSend(m, Locale("cmd.ey.notSuccess", GetSenderLocale(m)))
-							}
-						} else {
-							SmartSend(m, Locale("cmd.ey.duplicated", GetSenderLocale(m)))
-						}
-					}
+					SmartSend(m, Locale("cmd.ey.unexpected", GetSenderLocale(m)))
+				}
+			} else if m.ReplyTo.Sender.IsBot {
+				if Ban(m.Chat.ID, m.ReplyTo.Sender.ID, 1800) == nil {
+					SmartSend(m, fmt.Sprintf(Locale("cmd.ey.killBot", GetSenderLocale(m)), GetUserName(m.ReplyTo.Sender)))
+					LazyDelete(m)
+					LazyDelete(m.ReplyTo)
+				} else {
+					SmartSend(m, Locale("cmd.ey.notSuccess", GetSenderLocale(m)))
 				}
 			} else {
-				SmartSend(m, Locale("cmd.zc.noAnonymous", GetSenderLocale(m)))
+				userId := m.ReplyTo.Sender.ID
+				vtToken := fmt.Sprintf("vt-%d,%d", m.Chat.ID, userId)
+				token := fmt.Sprintf("ad-%d,%d", m.Chat.ID, m.Sender.ID)
+				if zcomap.Add(token) > 3 {
+					addCredit(m.Chat.ID, m.Sender, gc.CreditMapping.Duplicated, true, OPByAbuse, m.Sender.ID, "BanCoolDown")
+					SmartSend(m, Locale("cmd.ey.cooldown5", GetSenderLocale(m)))
+				} else {
+					if _, ok := votemap.Get(vtToken); !ok {
+						if Ban(m.Chat.ID, userId, 1800) == nil {
+							banCredit := gc.CreditMapping.Ban
+							banBounsCredit := gc.CreditMapping.BanBouns
+							addCredit(m.Chat.ID, m.ReplyTo.Sender, banCredit, true, OPByAbuse, m.Sender.ID, "BanPunishment")
+							addCredit(m.Chat.ID, m.Sender, banBounsCredit, true, OPByAbuse, m.ReplyTo.Sender.ID, "BanBonus")
+							votemap.Set(vtToken, 0)
+							msgTxt := fmt.Sprintf(Locale("cmd.ey.exec", GetSenderLocale(m)), GetUserName(m.ReplyTo.Sender), GetUserName(m.Sender), Abs(banCredit), Abs(banBounsCredit), 6)
+							SendBtns(m.ReplyTo, msgTxt, "", GenVMBtns(0, m.Chat.ID, userId, m.Sender.ID))
+							LazyDelete(m)
+							LazyDelete(m.ReplyTo)
+						} else {
+							SmartSend(m, Locale("cmd.ey.notSuccess", GetSenderLocale(m)))
+						}
+					} else {
+						SmartSend(m, Locale("cmd.ey.duplicated", GetSenderLocale(m)))
+					}
+				}
 			}
+		} else {
+			SmartSend(m, Locale("cmd.zc.noAnonymous", GetSenderLocale(m)))
 		}
-	} else {
-		SmartSendDelete(m, Locale("cmd.noGroupPerm", GetSenderLocale(m)))
 	}
 }
