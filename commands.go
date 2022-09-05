@@ -49,7 +49,7 @@ func CmdWarnUser(m *tb.Message) {
 
 func CmdBanUser(m *tb.Message) {
 	gc := GetGroupConfig(m.Chat.ID)
-	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
+	if IsGroupAdmin(c.Message.Chat, c.Sender.ID) {
 		if gc != nil && m.ReplyTo != nil {
 			if m.Sender.ID > 0 && m.Sender.Username != "Channel_Bot" {
 				if m.ReplyTo.Sender.ID == m.Sender.ID {
