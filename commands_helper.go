@@ -105,7 +105,7 @@ func CheckSpoiler(m *tb.Message) bool {
 func CheckChannelFollow(m *tb.Message, user *tb.User, isJoin bool) bool {
 	showExceptDialog := isJoin
 	if gc := GetGroupConfig(m.Chat.ID); gc != nil && gc.MustFollow != "" {
-		if IsAdmin(user.ID) || gc.IsAdmin(user.ID) {
+		if IsAdmin(user.ID) || gc.IsAdmin(GetSenderRealID(m)) {
 			return true
 		}
 		if isJoin && !gc.MustFollowOnJoin {
@@ -221,11 +221,11 @@ func GenLogDialog(c *tb.Callback, m *tb.Message, groupId int64, offset uint64, l
 	if c == nil && m == nil {
 		return
 	}
-	var operator *tb.User = nil
+	var operator int64 = 0
 	inGroup := false
 	locale := ""
 	if c == nil {
-		operator = m.Sender
+		operator = GetSenderRealID(m)
 		locale = GetSenderLocale(m)
 		_, ah := ArgParse(m.Payload)
 		inGroup, _ = ah.Bool("ingroup")
@@ -238,7 +238,7 @@ func GenLogDialog(c *tb.Callback, m *tb.Message, groupId int64, offset uint64, l
 			}
 		}
 	} else {
-		operator = c.Sender
+		operator = c.Sender.ID
 		locale = GetSenderLocaleCallback(c)
 	}
 
@@ -343,10 +343,7 @@ func ValidUser(u *tb.User) bool {
 
 func SmartEdit(to *tb.Message, what interface{}, options ...interface{}) (*tb.Message, error) {
 	if len(options) == 0 {
-		options = append([]interface{}{&tb.SendOptions{
-			DisableWebPagePreview: true,
-			AllowWithoutReply:     true,
-		}}, options...)
+		options = []interface{}{WithDefault()}
 	}
 	m, err := Bot.Edit(to, what, options...)
 	if err != nil {
@@ -356,9 +353,13 @@ func SmartEdit(to *tb.Message, what interface{}, options ...interface{}) (*tb.Me
 }
 
 func SmartSendDelete(to interface{}, what interface{}, options ...interface{}) (*tb.Message, error) {
+	return SmartSendDeleteAfter(to, what, 10, options...)
+}
+
+func SmartSendDeleteAfter(to interface{}, what interface{}, second time.Duration, options ...interface{}) (*tb.Message, error) {
 	msg, err := SmartSend(to, what, options...)
 	if err == nil && msg != nil {
-		LazyDelete(msg)
+		LazyDeleteAfter(msg, second)
 	}
 	return msg, err
 }
@@ -392,10 +393,7 @@ func MakeBtns(prefix string, btns []string) [][]tb.InlineButton {
 }
 
 func SendBtns(to interface{}, what interface{}, prefix string, btns []string) (*tb.Message, error) {
-	return SmartSendInner(to, what, &tb.SendOptions{
-		DisableWebPagePreview: true,
-		AllowWithoutReply:     true,
-	}, &tb.ReplyMarkup{
+	return SmartSendInner(to, what, WithDefault(), &tb.ReplyMarkup{
 		OneTimeKeyboard: true,
 		ResizeKeyboard:  true,
 		ForceReply:      false,
@@ -413,7 +411,7 @@ func SendBtnsMarkdown(to interface{}, what interface{}, prefix string, btns []st
 }
 
 func EditBtns(to *tb.Message, what interface{}, prefix string, btns []string) (*tb.Message, error) {
-	return SmartEdit(to, what, &tb.ReplyMarkup{
+	return SmartEdit(to, what, WithDefault(), &tb.ReplyMarkup{
 		OneTimeKeyboard: true,
 		ResizeKeyboard:  true,
 		ForceReply:      false,
@@ -432,10 +430,7 @@ func EditBtnsMarkdown(to *tb.Message, what interface{}, prefix string, btns []st
 
 func SmartSend(to interface{}, what interface{}, options ...interface{}) (*tb.Message, error) {
 	if len(options) == 0 {
-		return SmartSendInner(to, what, &tb.SendOptions{
-			DisableWebPagePreview: true,
-			AllowWithoutReply:     true,
-		})
+		return SmartSendInner(to, what, WithDefault())
 	}
 	return SmartSendInner(to, what, options...)
 }
@@ -467,10 +462,7 @@ func MakeButtons(btns []string) [][]tb.InlineButton {
 func SmartSendWithBtns(to interface{}, what interface{}, buttons []string, options ...interface{}) (*tb.Message, error) {
 	withOptions := []interface{}{}
 	if len(options) == 0 {
-		withOptions = append(withOptions, &tb.SendOptions{
-			DisableWebPagePreview: true,
-			AllowWithoutReply:     true,
-		})
+		withOptions = append(withOptions, WithDefault())
 	} else {
 		withOptions = options
 	}
@@ -563,6 +555,15 @@ func GetUserName(u *tb.User) string {
 	}
 
 	return s
+}
+
+// if it is the senderChat return chat id
+// otherwise, return sender user id
+func GetSenderRealID(m *tb.Message) int64 {
+	if m.SenderChat != nil {
+		return m.SenderChat.ID
+	}
+	return m.Sender.ID
 }
 
 func GetQuotableStr(f string) string {
@@ -764,32 +765,50 @@ func IsAdmin(uid int64) bool {
 	return I64In(&ADMINS, uid)
 }
 
-func IsGroupAdmin(c *tb.Chat, u *tb.User) bool {
-	isGAS := IsGroupAdminMiaoKo(c, u)
+// use uid instead to either support anonymous group auth + user auth
+func IsGroupAdmin(c *tb.Chat, uid int64) bool {
+	isGAS := IsGroupAdminMiaoKo(c, uid)
 	if isGAS {
 		return true
 	}
-	return IsGroupAdminTelegram(c, u)
+	return IsGroupAdminTelegram(c, uid)
 }
 
-func IsGroupAdminMiaoKo(c *tb.Chat, u *tb.User) bool {
+func IsGroupAdminMiaoKo(c *tb.Chat, uid int64) bool {
+	if uid == c.ID {
+		// if the user is anonymous via current group
+		// it must be the creator and he/she should be
+		// miaokeeper admin
+		return true
+	}
+
 	gc := GetGroupConfig(c.ID)
-	return gc != nil && gc.IsAdmin(u.ID)
+	return gc != nil && gc.IsAdmin(uid)
 }
 
-func IsGroupAdminTelegram(c *tb.Chat, u *tb.User) bool {
-	cm, _ := Bot.ChatMemberOf(c, u)
+func IsGroupAdminTelegram(c *tb.Chat, uid int64) bool {
+	if uid < 0 {
+		// with auth with group, only accept current group id
+		// as group admin (it must be the creator of the group)
+		return uid == c.ID
+	}
+
+	cm, _ := Bot.ChatMemberOf(c, &tb.User{ID: uid})
 	if cm != nil && (cm.Role == tb.Administrator || cm.Role == tb.Creator) {
 		return true
 	}
 	return false
 }
 
-func LazyDelete(m *tb.Message) {
-	lazyScheduler.After(time.Second*10, memutils.LSC("deleteMessage", &DeleteMessageArgs{
+func LazyDeleteAfter(m *tb.Message, second time.Duration) {
+	lazyScheduler.After(time.Second*second, memutils.LSC("deleteMessage", &DeleteMessageArgs{
 		ChatId:    m.Chat.ID,
 		MessageId: m.ID,
 	}))
+}
+
+func LazyDelete(m *tb.Message) {
+	LazyDeleteAfter(m, 10)
 }
 
 var GroupParserReg *regexp.Regexp
@@ -819,6 +838,13 @@ func ParseSession(m *tb.Message) (bool, int64, string) {
 func WithMarkdown() *tb.SendOptions {
 	return &tb.SendOptions{
 		ParseMode:             "Markdown",
+		DisableWebPagePreview: true,
+		AllowWithoutReply:     true,
+	}
+}
+
+func WithDefault() *tb.SendOptions {
+	return &tb.SendOptions{
 		DisableWebPagePreview: true,
 		AllowWithoutReply:     true,
 	}

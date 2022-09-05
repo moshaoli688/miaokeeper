@@ -147,6 +147,7 @@ var LocaleMap = map[string]map[string]string{
 		"btn.rp.draw.captcha": "%s|rp?c=%s&r=%d",
 		"btn.notFair":         "😠 这不公平 (%d)|vote?u=%d&s=%d",
 
+		"btn.close":         "🗑️ 隐藏消息|close",
 		"btn.adminPanel":    "🚩 解封[管理]|unban?u=%d&s=%d||🚮 清退[管理]|kick?u=%d&s=%d",
 		"btn.channel.step1": "👉 第一步：关注频道 👈|%s",
 		"btn.channel.step2": "👉 第二步：点我验证 👈|check?u=%d",
@@ -221,9 +222,9 @@ var LocaleMap = map[string]map[string]string{
 
 		"cmd.misc.version":       "👀 Current Version: %s",
 		"cmd.misc.replyid.chat":  "*Chat ID:* `%d`\n*Reply SenderChat ID:* `%d`\n*Reply SenderChat Type:* `%s`",
-		"cmd.misc.replyid.user":  "*Chat ID:* `%d`\n*Reply User ID:* `%d`\n*Reply User Locale:* `%s`",
+		"cmd.misc.replyid.user":  "*Chat ID:* `%d`\n*Reply User ID:* `%d`\n*Reply User Locale:* `%s`\n*Reply User Status:* `%v`\n*Reply User Verification:* `%v`",
 		"cmd.misc.id.chat":       "*Chat ID:* `%d`\n*SenderChat ID:* `%d`\n*SenderChat Type:* `%s`",
-		"cmd.misc.id.user":       "*Chat ID:* `%d`\n*User ID:* `%d`\n*User Locale:* `%s`",
+		"cmd.misc.id.user":       "*Chat ID:* `%d`\n*User ID:* `%d`\n*User Locale:* `%v`\n*User Status:* `%v`\n*User Verification:* `%v`",
 		"cmd.misc.ping.1":        "🔗 Telegram Server Transmission Delay:\n\nBot DC: `%dms`",
 		"cmd.misc.ping.2":        "🔗 Telegram Server Transmission Delay:\n\nBot DC: `%dms`\nGroup DC: `%dms`",
 		"cmd.misc.user.notExist": "❌ The credit info of the user does not exist",
@@ -320,6 +321,7 @@ var LocaleMap = map[string]map[string]string{
 		// "btn.rp.draw.captcha": "%s|rp?c=%s&r=%d",
 		// "btn.notFair": "😠 这不公平 (%d)|vote?u=%d&s=%d",
 
+		"btn.close":         "🗑️ Dismiss|close",
 		"btn.adminPanel":    "🚩 UNBAN [ADMIN]|unban?u=%d&s=%d||🚮 KICK [ADMIN]|kick?u=%d&s=%d",
 		"btn.channel.step1": "👉 1ST: JOIN THE CHANNEL 👈|%s",
 		"btn.channel.step2": "👉 2ND: RELEASE ME 👈|check?u=%d",

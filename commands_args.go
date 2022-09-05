@@ -47,7 +47,7 @@ func CmdImportPolicy(m *tb.Message) {
 		chatId = cid
 	}
 	gc := GetGroupConfig(chatId)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
 		Bot.Notify(m.Chat, tb.UploadingDocument)
 		ioHandler, err := Bot.File(&m.Document.File)
 		if err != nil {
@@ -175,7 +175,11 @@ func CmdSuDelAdmin(m *tb.Message) {
 func CmdGetPolicy(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
+		if m.SenderChat != nil {
+			SmartSendDelete(m, Locale("cmd.privateChatFirst", GetSenderLocale(m)))
+			return
+		}
 		err := Bot.Notify(m.Sender, tb.UploadingDocument)
 		if err != nil {
 			DErrorE(err, "Cmd Error | Export Policy | Cannot notify user")
@@ -198,7 +202,11 @@ func CmdGetPolicy(m *tb.Message) {
 func CmdSetPolicy(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
+		if m.SenderChat != nil {
+			SmartSendDelete(m, Locale("cmd.privateChatFirst", GetSenderLocale(m)))
+			return
+		}
 		_, err := SmartSend(m.Sender, fmt.Sprintf(Locale("cmd.privateSession", GetSenderLocale(m)), GetQuotableChatName(m.Chat), m.Chat.ID, "Policy"), WithMarkdown())
 		if err != nil {
 			DErrorE(err, "Cmd Error | Import Policy | Cannot send user session")
@@ -214,7 +222,11 @@ func CmdSetPolicy(m *tb.Message) {
 func CmdGetToken(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
+		if m.SenderChat != nil {
+			SmartSendDelete(m, Locale("cmd.privateChatFirst", GetSenderLocale(m)))
+			return
+		}
 		if _, err := SmartSend(m.Sender, fmt.Sprintf(Locale("cmd.getToken", GetSenderLocale(m)), GetQuotableChatName(m.Chat), m.Chat.ID, gc.GenerateSign(GST_API_SIGN), gc.GenerateSign(GST_POLICY_CALLBACK_SIGN)), WithMarkdown()); err == nil {
 			SmartSendDelete(m, Locale("credit.exportSuccess", GetSenderLocale(m)))
 		} else {
@@ -228,8 +240,8 @@ func CmdGetToken(m *tb.Message) {
 func CmdAddAdmin(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) && m.ReplyTo != nil {
-		if gc.UpdateAdmin(m.ReplyTo.Sender.ID, UMAdd) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) && m.ReplyTo != nil {
+		if gc.UpdateAdmin(GetSenderRealID(m.ReplyTo), UMAdd) {
 			SmartSendDelete(m.ReplyTo, Locale("grant.assign.success", GetSenderLocale(m)))
 		} else {
 			SmartSendDelete(m.ReplyTo, Locale("grant.assign.failure", GetSenderLocale(m)))
@@ -242,7 +254,7 @@ func CmdAddAdmin(m *tb.Message) {
 func CmdSetConfig(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
 		extra := strings.Fields(m.Payload)
 		if len(extra) != 2 {
 			SmartSendDelete(m, fmt.Sprintf(Locale("system.wrongUsage", GetSenderLocale(m)), "/set <ConfigPath> <Value>"), WithMarkdown())
@@ -259,7 +271,7 @@ func CmdSetConfig(m *tb.Message) {
 func CmdGetConfig(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
 		extra := strings.Fields(m.Payload)
 		if len(extra) != 1 {
 			SmartSendDelete(m, fmt.Sprintf(Locale("system.wrongUsage", GetSenderLocale(m)), "/get <ConfigPath>"), WithMarkdown())
@@ -276,8 +288,8 @@ func CmdGetConfig(m *tb.Message) {
 func CmdDelAdmin(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) && m.ReplyTo != nil {
-		if gc.UpdateAdmin(m.ReplyTo.Sender.ID, UMDel) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) && m.ReplyTo != nil {
+		if gc.UpdateAdmin(GetSenderRealID(m.ReplyTo), UMDel) {
 			SmartSendDelete(m.ReplyTo, Locale("grant.dismiss.success", GetSenderLocale(m)))
 		} else {
 			SmartSendDelete(m.ReplyTo, Locale("grant.dismiss.failure", GetSenderLocale(m)))
@@ -290,7 +302,7 @@ func CmdDelAdmin(m *tb.Message) {
 func CmdBanForward(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
 		isReply := false
 		id, _ := strconv.ParseInt(m.Payload, 10, 64)
 		if id == 0 && m.IsReply() && m.ReplyTo.IsForwarded() && m.ReplyTo.OriginalChat != nil {
@@ -317,7 +329,7 @@ func CmdBanForward(m *tb.Message) {
 func CmdUnbanForward(m *tb.Message) {
 	defer LazyDelete(m)
 	gc := GetGroupConfig(m.Chat.ID)
-	if gc != nil && (gc.IsAdmin(m.Sender.ID) || IsAdmin(m.Sender.ID)) {
+	if gc != nil && (gc.IsAdmin(GetSenderRealID(m)) || IsAdmin(m.Sender.ID)) {
 		id, _ := strconv.ParseInt(m.Payload, 10, 64)
 		if id == 0 && m.IsReply() && m.ReplyTo.IsForwarded() && m.ReplyTo.OriginalChat != nil {
 			id = m.ReplyTo.OriginalChat.ID
@@ -338,7 +350,7 @@ func CmdUnbanForward(m *tb.Message) {
 
 func CmdSetCredit(m *tb.Message) {
 	defer LazyDelete(m)
-	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
+	if IsGroupAdminMiaoKo(m.Chat, GetSenderRealID(m)) {
 		addons := ParseStrToInt64Arr(strings.Join(strings.Fields(strings.TrimSpace(m.Payload)), ","))
 		target := &UserInfo{}
 		credit := int64(0)
@@ -367,7 +379,7 @@ func CmdSetCredit(m *tb.Message) {
 
 func CmdAddCredit(m *tb.Message) {
 	defer LazyDelete(m)
-	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
+	if IsGroupAdminMiaoKo(m.Chat, GetSenderRealID(m)) {
 		addons := ParseStrToInt64Arr(strings.Join(strings.Fields(strings.TrimSpace(m.Payload)), ","))
 		target := &UserInfo{}
 		credit := int64(0)
@@ -396,7 +408,7 @@ func CmdAddCredit(m *tb.Message) {
 
 func CmdCheckCredit(m *tb.Message) {
 	defer LazyDelete(m)
-	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
+	if IsGroupAdminMiaoKo(m.Chat, GetSenderRealID(m)) {
 		if m.Chat.ID > 0 || !m.IsReply() {
 			SmartSendDelete(m, Locale("cmd.mustReply", GetSenderLocale(m)))
 		} else {
@@ -409,7 +421,7 @@ func CmdCheckCredit(m *tb.Message) {
 
 func CmdSetAntiSpoiler(m *tb.Message) {
 	defer LazyDelete(m)
-	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
+	if IsGroupAdminMiaoKo(m.Chat, GetSenderRealID(m)) {
 		gc := GetGroupConfig(m.Chat.ID)
 		if gc != nil {
 			status := false
@@ -435,7 +447,7 @@ func CmdSetAntiSpoiler(m *tb.Message) {
 
 func CmdSetChannel(m *tb.Message) {
 	defer LazyDelete(m)
-	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
+	if IsGroupAdminMiaoKo(m.Chat, GetSenderRealID(m)) {
 		gc := GetGroupConfig(m.Chat.ID)
 		if gc != nil {
 			payloads := strings.Fields(strings.TrimSpace(m.Payload))
@@ -480,7 +492,7 @@ func CmdSetChannel(m *tb.Message) {
 
 func CmdSetLocale(m *tb.Message) {
 	defer LazyDelete(m)
-	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
+	if IsGroupAdminMiaoKo(m.Chat, GetSenderRealID(m)) {
 		gc := GetGroupConfig(m.Chat.ID)
 		if gc != nil {
 			payloads := strings.Fields(strings.TrimSpace(m.Payload))
@@ -503,7 +515,7 @@ func CmdSetLocale(m *tb.Message) {
 
 func CmdCreditRank(m *tb.Message) {
 	defer LazyDelete(m)
-	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
+	if IsGroupAdminMiaoKo(m.Chat, GetSenderRealID(m)) {
 		rank, _ := strconv.Atoi(m.Payload)
 		if rank <= 0 {
 			rank = 10
@@ -536,7 +548,7 @@ func CmdCreditLog(m *tb.Message) {
 	if recordIdStr != "" {
 		recordId, _ = strconv.ParseInt(recordIdStr, 10, 64)
 	}
-	if IsGroupAdminMiaoKo(&tb.Chat{ID: groupId}, m.Sender) {
+	if IsGroupAdminMiaoKo(&tb.Chat{ID: groupId}, GetSenderRealID(m)) {
 		if uid, ok := ah.Int64("user"); ok {
 			userId = uid
 		}
@@ -563,7 +575,7 @@ func CmdCreateLottery(m *tb.Message) {
 	// :participant=(0-inf)
 	// :pin=y|n
 	defer LazyDelete(m)
-	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
+	if IsGroupAdminMiaoKo(m.Chat, GetSenderRealID(m)) {
 		payload, ah := ArgParse(m.Payload)
 		limit, _ := ah.Int("limit")
 		consume, _ := ah.Bool("consume")
@@ -601,7 +613,7 @@ func CmdCreateLottery(m *tb.Message) {
 
 func CmdLottery(m *tb.Message) {
 	defer LazyDelete(m)
-	if IsGroupAdminMiaoKo(m.Chat, m.Sender) {
+	if IsGroupAdminMiaoKo(m.Chat, GetSenderRealID(m)) {
 		payloads := strings.Fields(m.Payload)
 
 		rank := 0
@@ -652,7 +664,7 @@ func CmdStart(m *tb.Message) {
 
 func CmdBanUserCommand(m *tb.Message) {
 	defer LazyDelete(m)
-	if IsGroupAdmin(m.Chat, m.Sender) && ValidReplyUser(m) {
+	if IsGroupAdmin(m.Chat, GetSenderRealID(m)) && ValidReplyUser(m) {
 		if err := Ban(m.Chat.ID, m.ReplyTo.Sender.ID, 0); err == nil {
 			SmartSendDelete(m, fmt.Sprintf(Locale("gp.ban.success", GetSenderLocale(m)), GetQuotableUserName(m.ReplyTo.Sender)), WithMarkdown())
 		} else {
@@ -666,7 +678,7 @@ func CmdBanUserCommand(m *tb.Message) {
 
 func CmdUnbanUserCommand(m *tb.Message) {
 	defer LazyDelete(m)
-	if IsGroupAdmin(m.Chat, m.Sender) && ValidReplyUser(m) {
+	if IsGroupAdmin(m.Chat, GetSenderRealID(m)) && ValidReplyUser(m) {
 		if err := Unban(m.Chat.ID, m.ReplyTo.Sender.ID, 0); err == nil {
 			SmartSendDelete(m, fmt.Sprintf(Locale("gp.unban.success", GetSenderLocale(m)), GetQuotableUserName(m.ReplyTo.Sender)), WithMarkdown())
 		} else {
@@ -680,7 +692,7 @@ func CmdUnbanUserCommand(m *tb.Message) {
 
 func CmdKickUserCommand(m *tb.Message) {
 	defer LazyDelete(m)
-	if IsGroupAdmin(m.Chat, m.Sender) && ValidReplyUser(m) {
+	if IsGroupAdmin(m.Chat, GetSenderRealID(m)) && ValidReplyUser(m) {
 		if err := KickOnce(m.Chat.ID, m.ReplyTo.Sender.ID); err == nil {
 			SmartSendDelete(m, fmt.Sprintf(Locale("gp.kick.success", GetSenderLocale(m)), GetQuotableUserName(m.ReplyTo.Sender)), WithMarkdown())
 		} else {
@@ -696,6 +708,10 @@ func CmdKickUserCommand(m *tb.Message) {
 
 func CmdRedpacket(m *tb.Message) {
 	defer LazyDelete(m)
+	if m.SenderChat != nil {
+		return
+	}
+
 	if gc := GetGroupConfig(m.Chat.ID); gc != nil {
 		if gc.ExecPolicy(m) {
 			return
@@ -746,7 +762,7 @@ func CmdRedpacket(m *tb.Message) {
 
 func CmdMyCredit(m *tb.Message) {
 	defer LazyDelete(m)
-	if m.Chat.ID > 0 {
+	if m.Chat.ID > 0 || m.SenderChat != nil {
 		SmartSendDelete(m, Locale("cmd.mustInGroup", GetSenderLocale(m)))
 	} else if gc := GetGroupConfig(m.Chat.ID); gc != nil {
 		if gc.ExecPolicy(m) {
@@ -759,7 +775,7 @@ func CmdMyCredit(m *tb.Message) {
 
 func CmdCreditTransfer(m *tb.Message) {
 	defer LazyDelete(m)
-	if m.Chat.ID > 0 {
+	if m.Chat.ID > 0 || m.SenderChat != nil {
 		SmartSendDelete(m, Locale("cmd.mustInGroup", GetSenderLocale(m)))
 	} else if gc := GetGroupConfig(m.Chat.ID); gc != nil {
 		if gc.ExecPolicy(m) {

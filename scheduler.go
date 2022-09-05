@@ -73,7 +73,7 @@ func InitScheduler() {
 						SmartSendDelete(fakeMsg.Chat, textMsg, WithMarkdown())
 					} else {
 						KickOnce(fakeMsg.Chat.ID, fakeMsg.Sender.ID)
-						SmartSend(fakeMsg.Chat, textMsg, WithMarkdown())
+						SmartSendDeleteAfter(fakeMsg.Chat, textMsg, 5*60, WithMarkdown())
 					}
 				}
 			}
@@ -85,7 +85,7 @@ func InitScheduler() {
 		lsc.Arg(&args)
 		if args.LotteryId != "" {
 			li := GetLottery(args.LotteryId)
-			if li.Status != 2 {
+			if li.Status == 0 {
 				li.CheckDraw(false)
 			}
 		}
