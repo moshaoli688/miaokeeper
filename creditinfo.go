@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BBAlliance/miaokeeper/memutils"
 	"github.com/bep/debounce"
+	"github.com/miaokobot/miaokeeper/memutils"
 	tb "gopkg.in/telebot.v3"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

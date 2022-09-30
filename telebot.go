@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BBAlliance/miaokeeper/memutils"
 	"github.com/bep/debounce"
 	"github.com/gofrs/uuid"
+	"github.com/miaokobot/miaokeeper/memutils"
 	tb "gopkg.in/telebot.v3"
 )
 

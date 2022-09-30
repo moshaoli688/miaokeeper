@@ -133,6 +133,14 @@ func InitCallback() {
 		}
 	}).ShouldValidGroup(true).Should("r", "int64").Lock("credit")
 
+	callbackHandler.Add("ignorePtrn", func(cp *CallbackParams) {
+		gc := cp.GroupConfig()
+		uid, _ := cp.GetUserId("u")
+
+		gc.TemporarilyAllowList[uid] = true
+		cp.Response("cb.unban.success")
+	}).ShouldValidGroupAdmin(true).Should("u", "user")
+
 	callbackHandler.Add("unban", func(cp *CallbackParams) {
 		gid := cp.GroupID()
 		gc := cp.GroupConfig()

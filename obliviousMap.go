@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BBAlliance/miaokeeper/memutils"
+	"github.com/miaokobot/miaokeeper/memutils"
 )
 
 type ObliviousMapIfce struct {
