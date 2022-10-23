@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BBAlliance/miaokeeper/memutils"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/miaokobot/miaokeeper/memutils"
 	tb "gopkg.in/telebot.v3"
 	"gorm.io/gorm/clause"
 )

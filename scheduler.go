@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/BBAlliance/miaokeeper/memutils"
+	"github.com/miaokobot/miaokeeper/memutils"
 	tb "gopkg.in/telebot.v3"
 )
 

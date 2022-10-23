@@ -137,10 +137,11 @@ func CmdOnChatJoinRequest(ctx tb.Context) error {
 
 func CmdOnUserJoined(m *tb.Message) {
 	if gc := GetGroupConfig(m.Chat.ID); gc != nil {
-		if gc.IsBlackListName(m.Sender) {
+		if gc.IsBlackListName(m.Sender) && !gc.TemporarilyAllowList[m.Sender.ID] {
 			KickOnce(m.Chat.ID, m.Sender.ID)
 			Bot.Delete(m)
 			msg, _ := SendBtnsMarkdown(m.Chat, fmt.Sprintf(Locale("channel.pattern.kicked", GetSenderLocale(m)), m.Sender.ID), "", []string{
+				fmt.Sprintf(Locale("btn.ignorePatternCheck", GetSenderLocale(m)), m.Sender.ID),
 				Locale("btn.close", GetSenderLocale(m)),
 			})
 			if msg != nil {
@@ -149,6 +150,7 @@ func CmdOnUserJoined(m *tb.Message) {
 			}
 			return
 		}
+		delete(gc.TemporarilyAllowList, m.Sender.ID)
 	}
 	CheckChannelFollow(m, m.UserJoined, true)
 }

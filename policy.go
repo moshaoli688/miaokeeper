@@ -58,6 +58,8 @@ type GroupConfig struct {
 	NameBlackListReg   []string         `fw:"-"`
 	NameBlackListRegEx []*regexp.Regexp `json:"-" fw:"-"`
 
+	TemporarilyAllowList map[int64]bool `json:"-" yaml:"-" fw:"-"`
+
 	CustomReply []*CustomReplyRule `fw:"-"`
 
 	updateLock    sync.RWMutex `json:"-" fw:"-"`
@@ -186,6 +188,9 @@ func (gc *GroupConfig) Check() *GroupConfig {
 				DErrorf("Name BlackList Error | Not compilable regex=%s err=%s", regStr, err.Error())
 			}
 		}
+	}
+	if gc.TemporarilyAllowList == nil {
+		gc.TemporarilyAllowList = map[int64]bool{}
 	}
 	if gc.CustomReply == nil {
 		gc.CustomReply = make([]*CustomReplyRule, 0)
