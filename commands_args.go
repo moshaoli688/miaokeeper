@@ -790,7 +790,8 @@ func CmdCreditTransfer(m *tb.Message) {
 			ci.Acquire(func() {
 				if ci.Credit >= int64(credit) {
 					ci.unsafeUpdate(UMAdd, -int64(credit), (&UserInfo{}).From(m.Chat.ID, m.Sender), OPByTransfer, m.ReplyTo.Sender.ID, "Transferer")
-					addCredit(m.Chat.ID, m.ReplyTo.Sender, int64(credit), true, OPByTransfer, m.Sender.ID, "Transferee")
+					charge := credit / 2
+					addCredit(m.Chat.ID, m.ReplyTo.Sender, int64(charge), true, OPByTransfer, m.Sender.ID, "Transferee")
 
 					SmartSendDelete(m, fmt.Sprintf(Locale("transfer.success", GetSenderLocale(m)), credit))
 				} else {
