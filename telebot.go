@@ -93,7 +93,6 @@ func InitTelegram() {
 				AllowedUpdates: []string{"callback_query", "message", "edited_message", "my_chat_member", "chat_member", "chat_join_request"},
 				Listen:         WEBHOOKPORT,
 			},
-			Verbose: true,
 		})
 	}
 
