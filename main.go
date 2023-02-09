@@ -73,6 +73,8 @@ func main() {
 func init() {
 	flag.StringVar(&TOKEN, "token", "", "telegram bot token")
 	flag.StringVar(&TELEGRAMURL, "upstream", "", "telegram upstream api url")
+	flag.StringVar(&WEBHOOKENDPOINT, "webhookEndpoint", "", "telegram webhook public url")
+	flag.StringVar(&WEBHOOKPORT, "webhookport", "", "webhook bind port")
 	flag.StringVar(&DBCONN, "database", "", "mysql or its compatible database connection URL")
 	flag.StringVar(&DBPREFIX, "prefix", "MiaoKeeper", "prefix of database table name")
 	flag.StringVar(&redisServer, "redis", "", "use redis to provide high availability among restarts")

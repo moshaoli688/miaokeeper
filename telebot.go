@@ -24,6 +24,8 @@ const (
 
 var Bot *tb.Bot
 var TOKEN = ""
+var WEBHOOKENDPOINT = ""
+var WEBHOOKPORT = ""
 var TELEGRAMURL = ""
 
 var APIBind = 0
@@ -57,29 +59,43 @@ var DefaultBanKeywords = []string{"恶意广告", "惡意廣告", "恶意发言"
 
 func InitTelegram() {
 	var err error
-	Bot, err = tb.NewBot(tb.Settings{
-		Token: TOKEN,
-		Poller: &tb.LongPoller{
-			Timeout: 10 * time.Second,
-			AllowedUpdates: []string{
-				"message",
-				"edited_message",
-				// "channel_post",
-				// "edited_channel_post",
-				// "inline_query",
-				// "chosen_inline_result",
-				"callback_query",
-				// "shipping_query",
-				// "pre_checkout_query",
-				// "poll",
-				// "poll_answer",
-				"my_chat_member",
-				"chat_member",
-				"chat_join_request",
+	if WEBHOOKENDPOINT == "" {
+		Bot, err = tb.NewBot(tb.Settings{
+			Token: TOKEN,
+			Poller: &tb.LongPoller{
+				Timeout: 10 * time.Second,
+				AllowedUpdates: []string{
+					"message",
+					"edited_message",
+					// "channel_post",
+					// "edited_channel_post",
+					// "inline_query",
+					// "chosen_inline_result",
+					"callback_query",
+					// "shipping_query",
+					// "pre_checkout_query",
+					// "poll",
+					// "poll_answer",
+					"my_chat_member",
+					"chat_member",
+					"chat_join_request",
+				},
 			},
-		},
-		URL: TELEGRAMURL,
-	})
+
+			URL: TELEGRAMURL,
+		})
+
+	} else {
+		Bot, err = tb.NewBot(tb.Settings{
+			Token: TOKEN,
+			Poller: &tb.Webhook{
+				Endpoint:       &tb.WebhookEndpoint{PublicURL: WEBHOOKENDPOINT},
+				AllowedUpdates: []string{"callback_query", "message", "edited_message", "my_chat_member", "chat_member", "chat_join_request"},
+				Listen:         WEBHOOKPORT,
+			},
+			Verbose: true,
+		})
+	}
 
 	if err != nil {
 		DErrorf("TeleBot Error | cannot initialize bot | err=%s", err.Error())
